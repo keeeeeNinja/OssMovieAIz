@@ -20,11 +20,8 @@ Network Volumeを使わず、毎回新しいPodをデプロイし、使い終わ
 以下の1行をコピーしてJupyterLabのTerminalに貼り付けてください：
 
 ```bash
-bash <(curl -sSL https://raw.githubusercontent.com/YOUR_REPO/setup_comfyui.sh)
+curl -sSL https://raw.githubusercontent.com/keeeeeNinja/OssMovieAIz/master/setup_comfyui.sh | bash
 ```
-
-> 上記URLは自分のGitHubリポジトリにスクリプトをアップした場合の例。
-> アップしない場合は、下記スクリプト全体をコピペして実行してください。
 
 ### スクリプト全体 (setup_comfyui.sh)
 
