@@ -369,14 +369,14 @@ workflow = {
     }
   },
   \"9\": {
-    \"class_type\": \"SaveAnimatedWEBP\",
+    \"class_type\": \"VHS_VideoCombine\",
     \"inputs\": {
       \"images\": [\"8\", 0],
+      \"frame_rate\": 16,
+      \"loop_count\": 0,
       \"filename_prefix\": \"[OUTPUT_PREFIX]\",
-      \"fps\": 16,
-      \"lossless\": False,
-      \"quality\": 85,
-      \"method\": \"default\"
+      \"format\": \"video/h264-mp4\",
+      \"save_output\": True
     }
   },
   \"10\": {
@@ -439,16 +439,16 @@ ssh -o StrictHostKeyChecking=no SSH_HOST "ls -lh /workspace/ComfyUI/output/[OUTP
 
 # ダウンロード
 scp -o StrictHostKeyChecking=no -P [PORT] -i ~/.ssh/id_ed25519 \
-  "root@[IP]:/workspace/ComfyUI/output/[OUTPUT_PREFIX]_00001_.webp" \
-  "/Users/keeee/Desktop/Dev/OssMovieAIz/作業中動画/[ファイル名].webp"
+  "root@[IP]:/workspace/ComfyUI/output/[OUTPUT_PREFIX]_00001.mp4" \
+  "/Users/keeee/Desktop/Dev/OssMovieAIz/作業中動画/[ファイル名].mp4"
 ```
 
-**ファイル名規則:** `scene[番号]_[コンセプト名]_wan21.webp`
+**ファイル名規則:** `scene[番号]_[コンセプト名]_wan21.mp4`
 
 例:
-- `scene1_商品フォーカス_wan21.webp`
-- `scene2_使用シーン_wan21.webp`
-- `scene3_ブランド世界観_wan21.webp`
+- `scene1_商品フォーカス_wan21.mp4`
+- `scene2_使用シーン_wan21.mp4`
+- `scene3_ブランド世界観_wan21.mp4`
 
 ---
 
@@ -461,9 +461,9 @@ scp -o StrictHostKeyChecking=no -P [PORT] -i ~/.ssh/id_ed25519 \
 
 | シーン | ファイル | 解像度 | seed |
 |-------|---------|--------|------|
-| Scene 1 | scene1_xxx_wan21.webp | 480×832 | 12345 |
-| Scene 2 | scene2_xxx_wan21.webp | 480×832 | 67890 |
-| Scene 3 | scene3_xxx_wan21.webp | 480×832 | 11111 |
+| Scene 1 | scene1_xxx_wan21.mp4 | 480×832 | 12345 |
+| Scene 2 | scene2_xxx_wan21.mp4 | 480×832 | 67890 |
+| Scene 3 | scene3_xxx_wan21.mp4 | 480×832 | 11111 |
 
 保存先: 作業中動画/
 生成時間: 約X分
@@ -482,7 +482,4 @@ scp -o StrictHostKeyChecking=no -P [PORT] -i ~/.ssh/id_ed25519 \
 - **SSH接続情報は毎回確認**: RunPodはPod再起動のたびにIPとポートが変わる。Step 0 で毎回確認する。
 - **ComfyUI APIのノード名は変動しうる**: カスタムノードのアップデートでノード名が変わることがある。エラー時は object_info エンドポイントで確認する。
 - **コスト**: RunPod RTX 4090 = 約$0.69/時間。1本5秒の動画に3〜5分。3本生成で約$0.05〜0.10。
-- **webp出力**: Wan 2.1はデフォルトでAnimated WEBPを出力する。mp4が必要な場合はffmpegで変換:
-  ```bash
-  ffmpeg -i input.webp -c:v libx264 -pix_fmt yuv420p output.mp4
-  ```
+- **mp4出力**: VideoHelperSuite（VHS_VideoCombine）でh264 mp4を直接出力する。VHSが使えない場合はSaveAnimatedWEBPにフォールバックし、ffmpegで変換: `ffmpeg -i input.webp -c:v libx264 -pix_fmt yuv420p output.mp4`
