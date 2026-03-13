@@ -114,7 +114,7 @@ python3 -c "import torch; print('CUDA:', torch.cuda.is_available())"
 
 # --- 8. Start ComfyUI ---
 cd /workspace/ComfyUI
-python3 main.py --listen 0.0.0.0 --port 8188 > /workspace/comfyui.log 2>&1 &
+python3 main.py --listen 0.0.0.0 --port 8188 --use-sage-attention > /workspace/comfyui.log 2>&1 &
 echo '[8/8] ComfyUI starting on port 8188...'
 sleep 25
 HTTP_CODE=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8188/)

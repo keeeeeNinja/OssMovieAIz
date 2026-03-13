@@ -351,10 +351,17 @@ workflow = {
       \"image\": [\"6\", 0]
     }
   },
+  \"11\": {
+    \"class_type\": \"SetUniformTeaCacheForWanVideo\",
+    \"inputs\": {
+      \"model\": [\"1\", 0],
+      \"rel_l1_thresh\": 0.15
+    }
+  },
   \"8\": {
     \"class_type\": \"WanImageToVideo\",
     \"inputs\": {
-      \"model\": [\"1\", 0],
+      \"model\": [\"11\", 0],
       \"positive\": [\"3\", 0],
       \"negative\": [\"4\", 0],
       \"clip_vision_output\": [\"7\", 0],
