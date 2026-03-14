@@ -58,6 +58,10 @@ echo '[4/8] SageAttention done'
 # --- 5. Wan 2.1 I2V Models (parallel download) ---
 echo '[5/8] Downloading Wan 2.1 I2V models...'
 
+mkdir -p /workspace/ComfyUI/models/diffusion_models
+mkdir -p /workspace/ComfyUI/models/text_encoders
+mkdir -p /workspace/ComfyUI/models/clip_vision
+
 cd /workspace/ComfyUI/models/diffusion_models
 [ ! -f "wan2.1-i2v-14b-480p-Q5_K_M.gguf" ] && \
   wget -q https://huggingface.co/city96/Wan2.1-I2V-14B-480P-gguf/resolve/main/wan2.1-i2v-14b-480p-Q5_K_M.gguf &
@@ -114,7 +118,7 @@ python3 -c "import torch; print('CUDA:', torch.cuda.is_available())"
 
 # --- 8. Start ComfyUI ---
 cd /workspace/ComfyUI
-python3 main.py --listen 0.0.0.0 --port 8188 --use-sage-attention > /workspace/comfyui.log 2>&1 &
+python3 main.py --listen 0.0.0.0 --port 8188 > /workspace/comfyui.log 2>&1 &
 echo '[8/8] ComfyUI starting on port 8188...'
 sleep 25
 HTTP_CODE=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8188/)
