@@ -128,17 +128,24 @@ ls /Users/keeee/Desktop/Dev/OssMovieAIz/作業中動画/
 
 #### Wan 2.1 I2V プロンプト設計の基本方針
 
-**参照画像ありき**: 視覚スタイルは参照画像が担う。プロンプトは「動き」と「カメラ」と「雰囲気」だけを指定する。
+**参照画像ありき（I2V）**: 見た目・スタイルは参照画像が担う。プロンプトは「動き」「カメラ」「照明」「雰囲気」に集中する。被写体の外見説明は不要。
 
 **英語で書く**: ComfyUI + Wanへのプロンプトは英語が最も安定する。
 
+**プロンプトの長さ**: I2Vでも**動き・カメラ・照明を詳細に書く**方が高品質になる。ただし被写体の外見説明は省略する（画像が担うため）。
+
 **縦型動画**: 解像度は `480×832`（9:16縦型）。横型なら `832×480`。
+
+**プロンプト構成順序（推奨）:**
+```
+[被写体の状態・アクション] + [シーン・環境] + [カメラワーク] + [照明] + [雰囲気・スタイル] + [ショットサイズ] + [品質ブースト]
+```
 
 #### 動き指定の原則
 
 **前提：技術制約は「視聴者体験を諦める理由」にならない**
 
-Wan 2.1はKlingやRunwayと比べると動きのコントロール精度が低い（オープンソースモデルの特性）。しかしそれは「できないこと」ではなく「シンプルに書くべき」ということ。
+Wan 2.1はKlingやRunwayと比べると動きのコントロール精度が低い（オープンソースモデルの特性）。しかしそれは「できないこと」ではなく「動きをシンプルに、カメラと照明を詳細に書くべき」ということ。
 
 **Wan 2.1 I2Vの動き特性:**
 - 参照画像の構図をかなり忠実に維持する（I2Vの強み）
@@ -163,28 +170,67 @@ Wan 2.1はKlingやRunwayと比べると動きのコントロール精度が低�
 | `lifts the product` | `the product placed elegantly on the table` |
 | `walks forward` | `standing gracefully, slight breeze in hair` |
 
-**カメラワーク（Wan 2.1で効きやすい指示）:**
-- `slow push-in`（ゆっくり寄る・商品の魅力を引き出す）
-- `slow pull-back`（ゆっくり引く・全体を見せる）
-- `camera slowly orbits`（旋回・シネマティック感）
-- `gentle tilt down`（上から商品へ）
-- `static shot, subtle movement`（固定カメラ・被写体の微細な動き）
+#### カメラワーク辞書
+
+**参照:** `camera_work_reference.md` に6カテゴリ・30種類の詳細あり。
+
+**Wan 2.1 I2Vで効きやすいカメラワーク（TOP10）:**
+
+| カメラワーク | 用途 | プロンプト例 |
+|------------|------|------------|
+| Slow Dolly In | 商品に寄る・注目させる | `slow dolly in` |
+| Pull Back / Dolly Out | 全体を見せる・引きの演出 | `slow pull back` |
+| Orbit | 被写体の周りを回る・シネマティック | `slow orbit camera` |
+| Pan Right/Left | 視線誘導・環境を見せる | `slow pan right` |
+| Tilt Up/Down | 商品を上から下へ見せる | `cinematic tilt down` |
+| Push In | ゆっくり近づく・ドラマティック | `dramatic push in` |
+| Crane Down | 上から降りてくる・高級感 | `crane down cinematic` |
+| Static Shot | 固定カメラ・被写体の微細な動き | `static shot, subtle movement` |
+| Tracking Shot | 追従撮影 | `tracking shot` |
+| Parallax Shot | 前後差で奥行き演出 | `parallax shot` |
+
+**カメラワーク選択の指針:**
+- 商品フォーカス → `slow dolly in` / `orbit` / `tilt down`
+- 人物の表情 → `slow push in` / `static shot`
+- 全体を見せる → `pull back` / `crane down`
+- 映画っぽさ → `orbit` + `shallow depth of field`
+
+#### 照明辞書
+
+シーンに合わせて照明を使い分ける。**I2Vでも照明指定はプロンプトに効く。**
+
+| 照明 | 用途 | プロンプト例 |
+|-----|------|------------|
+| Soft light | 柔らかい光・スキンケア/美容系 | `soft diffused light` |
+| Cinematic lighting | 映画的なコントラスト | `cinematic lighting` |
+| Volumetric lighting | 光の筋・神秘感・高級感 | `volumetric lighting, light rays` |
+| Studio lighting | スタジオ撮影風・商品撮影 | `professional studio lighting` |
+| Golden hour | 暖かみ・夕方の自然光 | `golden hour warm light` |
+| Backlight | 逆光・シルエット・ドラマティック | `soft backlight, rim lighting` |
+| Natural light | 自然光・清潔感・日常感 | `natural window light` |
 
 #### プロンプトテンプレート
 
 **商品のみ:**
 ```
-[商品の状態・配置]. [光の演出]. [カメラワーク]. [雰囲気キーワード], high quality, 4K.
+[商品の状態・配置]. [シーン・環境]. [カメラワーク]. [照明]. [雰囲気], [ショットサイズ], high quality, 4K.
 ```
 
 **人物のみ / 人物メイン:**
 ```
-[人物の状態・ポーズ・表情]. [商品または小道具の配置（状態で）]. [カメラワーク]. [光・雰囲気], high quality, 4K.
+[人物の状態・ポーズ・表情]. [アクション（1つだけ）]. [カメラワーク]. [照明]. [雰囲気], [ショットサイズ], high quality, 4K.
 ```
 
-**Wan 2.1用の品質ブースト接尾辞（常に付ける）:**
+**I2Vプロンプト作成のチェックリスト:**
+- [ ] 被写体の外見説明を書いていないか（画像が担う → 不要）
+- [ ] 動きは1〜2アクションに絞っているか
+- [ ] カメラワークを1つ明示しているか
+- [ ] 照明をシーンに合わせて指定しているか
+- [ ] 品質ブースト接尾辞を付けているか
+
+**品質ブースト接尾辞（常に付ける）:**
 ```
-, high quality, cinematic lighting, detailed, 4K
+, high quality, cinematic, detailed, 4K
 ```
 
 **ネガティブプロンプト（常に使用）:**
