@@ -63,10 +63,17 @@ OssMovieAIz/
 - GPU: RTX 4090（VRAM 24GB）
 - ComfyUI: `/workspace/ComfyUI/`（port 8188）
 - モデル: Wan 2.1 I2V 14B（Q5_K_M GGUF）
+- SSH/SCPコマンドは一括許可済み（settings.local.json）
 - SSH接続情報はPod再起動ごとに変わる → `pod起動コマンド.md` 参照
 - SSHキー設定: `ssh.md` 参照
 - 運用ガイド: `RunPodの運用方法.md`
 - 構築仕様: `AI動画生成＆LoRA学習環境 構築仕様書.md`
+
+### 複数Pod並列運用
+- Network Volumeは同時に1つのPodにしかマウントできない
+- **Pod 1**: Network Volume付き → 即使用可能
+- **Pod 2以降**: Volume なし → `setup_comfyui.sh` をJupyterで実行（約5-10分でモデルDL完了）
+- 全Pod準備完了後、各Podに1クリップずつ割り当てて一斉生成
 
 ## スキル一覧
 | スキル | 用途 |

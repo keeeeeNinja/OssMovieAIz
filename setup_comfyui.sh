@@ -17,8 +17,10 @@ if [ ! -d "ComfyUI" ]; then
   git clone https://github.com/comfyanonymous/ComfyUI.git
 fi
 cd ComfyUI
+git checkout master 2>/dev/null || true
+git pull origin master 2>/dev/null || true
 pip install -q -r requirements.txt
-echo '[2/8] ComfyUI installed'
+echo '[2/8] ComfyUI installed (latest)'
 
 # --- 3. Custom Nodes ---
 cd /workspace/ComfyUI/custom_nodes
@@ -61,6 +63,7 @@ echo '[5/8] Downloading Wan 2.1 I2V models...'
 mkdir -p /workspace/ComfyUI/models/diffusion_models
 mkdir -p /workspace/ComfyUI/models/text_encoders
 mkdir -p /workspace/ComfyUI/models/clip_vision
+mkdir -p /workspace/ComfyUI/models/vae
 
 cd /workspace/ComfyUI/models/diffusion_models
 [ ! -f "wan2.1-i2v-14b-480p-Q5_K_M.gguf" ] && \

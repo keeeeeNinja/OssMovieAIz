@@ -269,7 +269,7 @@ blurry, distorted, low quality, shaky, deformed hands, extra fingers, watermark,
 **モデル:** Wan 2.1 I2V 14B (Q5_K_M GGUF)
 **解像度:** 480×832（縦型9:16）
 **ステップ数:** 30
-**CFG:** 1.0
+**CFG:** 3.0
 
 **プロンプト（英語）**
 ```
@@ -562,5 +562,7 @@ scp -o StrictHostKeyChecking=no -P [PORT] -i ~/.ssh/id_ed25519 \
 - **カメラワークは1つだけ**: 複数のカメラ指示を書くと無視される。最も重要な1つだけ書く。
 - **SSH接続情報は毎回確認**: RunPodはPod再起動のたびにIPとポートが変わる。Step 0 で毎回確認する。
 - **ComfyUI APIのノード名は変動しうる**: カスタムノードのアップデートでノード名が変わることがある。エラー時は object_info エンドポイントで確認する。
-- **コスト**: RunPod RTX 4090 = 約$0.69/時間。1本5秒の動画に3〜5分。3本生成で約$0.05〜0.10。
+- **コスト**: RunPod RTX 4090 = 約$0.69/時間。480pで1クリップ約8.5分（TeaCacheなし）。5クリップで約$0.50。
 - **mp4出力**: VideoHelperSuite（VHS_VideoCombine）でh264 mp4を直接出力する。VHSが使えない場合はSaveAnimatedWEBPにフォールバックし、ffmpegで変換: `ffmpeg -i input.webp -c:v libx264 -pix_fmt yuv420p output.mp4`
+- **TeaCacheの注意**: プロンプトを変更して再生成する際は、ComfyUIを`kill -9 <PID>`で完全に再起動すること（`pkill`では死なない場合がある）。キャッシュ不一致で出力がノイズまみれになる。また、CFG=1.0とTeaCacheの組み合わせは動きがほぼ消えるため、**CFG=3.0以上で使うこと**。
+- **CFG値**: 3.0推奨。1.0では静止画に近い出力になり動きが出ない。高すぎる（7.0〜）と画像が破綻する。
