@@ -297,7 +297,11 @@ scp -o StrictHostKeyChecking=no -P [PORT] -i ~/.ssh/id_ed25519 \
 
 #### Wan 2.1 I2V ワークフローJSON
 
-以下のJSONテンプレートを使う。`[PROMPT]`、`[NEGATIVE]`、`[IMAGE_NAME]`、`[OUTPUT_PREFIX]` を各シーンの値に置き換える。
+以下のJSONテンプレートを使う。`[PROMPT]`、`[NEGATIVE]`、`[IMAGE_NAME]`、`[OUTPUT_PREFIX]`、`SEED_VALUE` を各シーンの値に置き換える。
+
+**解像度切り替え:**
+- 縦型480p: `width=480, height=832, coefficients="i2v_480"`
+- 縦型720p: `width=720, height=1280, coefficients="i2v_720"`
 
 ```bash
 ssh -o StrictHostKeyChecking=no SSH_HOST 'python3 -c "
@@ -311,10 +315,9 @@ workflow = {
     }
   },
   \"2\": {
-    \"class_type\": \"CLIPLoaderDual\",
+    \"class_type\": \"CLIPLoader\",
     \"inputs\": {
-      \"clip_name1\": \"umt5_xxl_fp8_e4m3fn_scaled.safetensors\",
-      \"clip_name2\": \"umt5_xxl_fp8_e4m3fn_scaled.safetensors\",
+      \"clip_name\": \"umt5_xxl_fp8_e4m3fn_scaled.safetensors\",
       \"type\": \"wan\"
     }
   },
@@ -347,49 +350,74 @@ workflow = {
   \"7\": {
     \"class_type\": \"CLIPVisionEncode\",
     \"inputs\": {
+      \"crop\": \"center\",
       \"clip_vision\": [\"5\", 0],
       \"image\": [\"6\", 0]
-    }
-  },
-  \"11\": {
-    \"class_type\": \"SetUniformTeaCacheForWanVideo\",
-    \"inputs\": {
-      \"model\": [\"1\", 0],
-      \"rel_l1_thresh\": 0.15
-    }
-  },
-  \"8\": {
-    \"class_type\": \"WanImageToVideo\",
-    \"inputs\": {
-      \"model\": [\"11\", 0],
-      \"positive\": [\"3\", 0],
-      \"negative\": [\"4\", 0],
-      \"clip_vision_output\": [\"7\", 0],
-      \"vae\": [\"10\", 0],
-      \"image\": [\"6\", 0],
-      \"width\": 480,
-      \"height\": 832,
-      \"length\": 81,
-      \"steps\": 30,
-      \"cfg\": 1.0,
-      \"seed\": SEED_VALUE
-    }
-  },
-  \"9\": {
-    \"class_type\": \"VHS_VideoCombine\",
-    \"inputs\": {
-      \"images\": [\"8\", 0],
-      \"frame_rate\": 16,
-      \"loop_count\": 0,
-      \"filename_prefix\": \"[OUTPUT_PREFIX]\",
-      \"format\": \"video/h264-mp4\",
-      \"save_output\": True
     }
   },
   \"10\": {
     \"class_type\": \"VAELoader\",
     \"inputs\": {
       \"vae_name\": \"wan_2.1_vae.safetensors\"
+    }
+  },
+  \"11\": {
+    \"class_type\": \"WanVideoTeaCacheKJ\",
+    \"inputs\": {
+      \"model\": [\"1\", 0],
+      \"rel_l1_thresh\": 0.3,
+      \"start_percent\": 0.1,
+      \"end_percent\": 1.0,
+      \"cache_device\": \"offload_device\",
+      \"coefficients\": \"i2v_480\"
+    }
+  },
+  \"8\": {
+    \"class_type\": \"WanImageToVideo\",
+    \"inputs\": {
+      \"positive\": [\"3\", 0],
+      \"negative\": [\"4\", 0],
+      \"vae\": [\"10\", 0],
+      \"width\": 480,
+      \"height\": 832,
+      \"length\": 81,
+      \"batch_size\": 1,
+      \"clip_vision_output\": [\"7\", 0],
+      \"start_image\": [\"6\", 0]
+    }
+  },
+  \"12\": {
+    \"class_type\": \"KSampler\",
+    \"inputs\": {
+      \"model\": [\"11\", 0],
+      \"positive\": [\"8\", 0],
+      \"negative\": [\"8\", 1],
+      \"latent_image\": [\"8\", 2],
+      \"seed\": SEED_VALUE,
+      \"steps\": 30,
+      \"cfg\": 1.0,
+      \"sampler_name\": \"euler\",
+      \"scheduler\": \"simple\",
+      \"denoise\": 1.0
+    }
+  },
+  \"13\": {
+    \"class_type\": \"VAEDecode\",
+    \"inputs\": {
+      \"samples\": [\"12\", 0],
+      \"vae\": [\"10\", 0]
+    }
+  },
+  \"9\": {
+    \"class_type\": \"VHS_VideoCombine\",
+    \"inputs\": {
+      \"images\": [\"13\", 0],
+      \"frame_rate\": 16,
+      \"loop_count\": 0,
+      \"filename_prefix\": \"[OUTPUT_PREFIX]\",
+      \"format\": \"video/h264-mp4\",
+      \"pingpong\": False,
+      \"save_output\": True
     }
   }
 }

@@ -1,0 +1,1 @@
+wget -qO- https://raw.githubusercontent.com/keeeeeNinja/OssMovieAIz/master/setup_comfyui.sh | bash
