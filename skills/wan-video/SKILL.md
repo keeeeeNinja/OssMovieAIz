@@ -1,7 +1,7 @@
 ---
 name: wan-video
 description: 作業中動画フォルダの画像を分析してWan 2.1 I2V（ComfyUI on RunPod）用のプロンプトを作成し、SSH経由でRunPodに送信して動画生成まで実行する。Wanで動画作って、Wan用プロンプト、ComfyUIで生成、RunPodで動画生成して、という場面で必ず使う。
-allowed-tools: Bash(ls *), Bash(ssh *), Bash(scp *), Bash(sleep *), Bash(curl *), Read, Write
+allowed-tools: Bash, Read, Write
 ---
 
 ## Wan 2.1 I2V 動画生成（ComfyUI on RunPod）

@@ -2,7 +2,6 @@
 name: video-script
 description: 作業中動画フォルダの動画を分析してショート動画用のテロップとナレーション原稿を生成する。フック・本題・行動喚起の3部構成。動画スクリプト、テロップ、ナレーション、ショート動画の原稿を作りたいときに使う。
 allowed-tools: Bash(ffmpeg *), Bash(ffprobe *), Bash(ls *), Bash(python3 *), Bash(awk *), Bash(for *), Read, Write
-disable-model-invocation: true
 ---
 
 ## 動画スクリプト生成

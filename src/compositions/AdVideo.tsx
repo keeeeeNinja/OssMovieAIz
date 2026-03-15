@@ -18,81 +18,34 @@ const animC = (frame: number, text: string, startFrame = 20) => {
 };
 
 // ===== クリップ定義 =====
-const clips = [
+const clips: {
+  file?: string;
+  durationInFrames: number;
+  render?: (frame: number) => React.ReactNode;
+}[] = [
+  // Scene 1 — タイトル（黒バック・3秒）P10 筆書き風
   {
-    file: "scene1.mp4",
-    durationInFrames: 92,
+    durationInFrames: 90,
     render: (frame: number) => (
-      <AbsoluteFill style={{
-        justifyContent: "flex-start",
-        alignItems: "flex-start",
-        paddingTop: 160,
-        paddingLeft: 48,
-      }}>
+      <AbsoluteFill style={{ backgroundColor: "black", justifyContent: "center", alignItems: "center" }}>
         <div style={{
           fontSize: 96,
-          fontWeight: 800,
+          fontWeight: 900,
           fontFamily: "Hiragino Mincho ProN, YuMincho, serif",
-          letterSpacing: "0.15em",
-          lineHeight: 1.25,
-          color: "#2A2A2A",
-          whiteSpace: "pre-line" as const,
-        }}>
-          {animC(frame, "その化粧水、\n肌に届いてる？")}
-        </div>
-      </AbsoluteFill>
-    ),
-  },
-  {
-    file: "scene2.mp4",
-    durationInFrames: 92,
-    render: (frame: number) => (
-      <AbsoluteFill style={{
-        justifyContent: "flex-end",
-        alignItems: "center",
-        paddingBottom: 240,
-      }}>
-        <div style={{
-          fontSize: 80,
-          fontWeight: 300,
-          fontFamily: "Hiragino Mincho ProN, YuMincho, serif",
-          letterSpacing: "0.25em",
-          lineHeight: 1.5,
-          color: "#1A1A1A",
+          letterSpacing: "-0.02em",
+          lineHeight: 1.1,
+          color: "#F5E6C8",
           textAlign: "center" as const,
         }}>
-          {animC(frame, "浸透力が、まるで違う")}
+          {animC(frame, "とんかつ のまど", 15)}
         </div>
       </AbsoluteFill>
     ),
   },
+  // Scene 2 — 疲れた日常（5秒）P1 下部左寄せ太ゴシック
   {
-    file: "scene3.mp4",
-    durationInFrames: 92,
-    render: (frame: number) => (
-      <AbsoluteFill style={{
-        justifyContent: "center",
-        alignItems: "flex-end",
-        paddingRight: 64,
-      }}>
-        <div style={{
-          writingMode: "vertical-rl" as const,
-          fontSize: 72,
-          fontWeight: 300,
-          fontFamily: "Hiragino Mincho ProN, YuMincho, serif",
-          letterSpacing: "0.3em",
-          lineHeight: 1,
-          color: "#2A2A2A",
-          textShadow: "0 1px 16px rgba(255,255,255,0.6)",
-        }}>
-          {animC(frame, "つけた瞬間、もちもち肌へ")}
-        </div>
-      </AbsoluteFill>
-    ),
-  },
-  {
-    file: "scene4.mp4",
-    durationInFrames: 92,
+    file: "scene2.mp4",
+    durationInFrames: 152,
     render: (frame: number) => (
       <AbsoluteFill style={{
         justifyContent: "flex-end",
@@ -101,38 +54,157 @@ const clips = [
         paddingLeft: 56,
       }}>
         <div style={{
-          fontSize: 84,
-          fontWeight: 600,
-          fontFamily: "Hiragino Mincho ProN, YuMincho, serif",
+          fontSize: 80,
+          fontWeight: 700,
+          fontFamily: "Hiragino Sans, sans-serif",
           letterSpacing: "0.02em",
           lineHeight: 1.3,
-          color: "#2A2A2A",
-          textShadow: "0 2px 16px rgba(255,255,255,0.5)",
+          color: "#FFFFFF",
+          textShadow: "0 2px 24px rgba(0,0,0,0.7)",
         }}>
-          {animC(frame, "自信が持てる素肌に")}
+          {animC(frame, "今日も、お疲れ様。")}
         </div>
       </AbsoluteFill>
     ),
   },
+  // Scene 3 — 暖簾の誘い（5秒）テロップなし
+  {
+    file: "scene3.mp4",
+    durationInFrames: 152,
+  },
+  // Scene 4 — 職人の衣付け（5秒）テロップなし
+  {
+    file: "scene4.mp4",
+    durationInFrames: 152,
+  },
+  // Scene 5 — 油に投入（5秒）テロップなし
   {
     file: "scene5.mp4",
-    durationInFrames: 92,
+    durationInFrames: 152,
+  },
+  // Scene 6 — 揚げ中の臨場感（5秒）テロップなし
+  {
+    file: "scene6.mp4",
+    durationInFrames: 152,
+  },
+  // Scene 7 — 黄金の断面（5秒）P4 縦書き端配置
+  {
+    file: "scene7.mp4",
+    durationInFrames: 152,
     render: (frame: number) => (
       <AbsoluteFill style={{
-        justifyContent: "flex-start",
-        alignItems: "flex-end",
-        paddingTop: 180,
-        paddingRight: 56,
+        justifyContent: "center",
+        alignItems: "flex-start",
+        paddingLeft: 64,
       }}>
         <div style={{
+          writingMode: "vertical-rl" as const,
           fontSize: 72,
           fontWeight: 300,
           fontFamily: "Hiragino Mincho ProN, YuMincho, serif",
-          letterSpacing: "0.1em",
-          lineHeight: 1.6,
-          color: "#3D3D3D",
+          letterSpacing: "0.3em",
+          lineHeight: 1,
+          color: "#F5E6C8",
+          textShadow: "0 1px 16px rgba(0,0,0,0.4)",
         }}>
-          {animC(frame, "NMD 詳しくはこちら")}
+          {animC(frame, "この断面が、すべて")}
+        </div>
+      </AbsoluteFill>
+    ),
+  },
+  // Scene 8 — 至福の定食（5秒）P8 下部帯テキスト
+  {
+    file: "scene8.mp4",
+    durationInFrames: 152,
+    render: (frame: number) => (
+      <AbsoluteFill style={{
+        justifyContent: "flex-end",
+        alignItems: "stretch",
+        opacity: interpolate(frame, [0, 20], [0, 1], { extrapolateRight: "clamp" }),
+        transform: `translateY(${interpolate(frame, [0, 20], [40, 0], { extrapolateRight: "clamp" })}px)`,
+      }}>
+        <div style={{
+          backgroundColor: "rgba(0,0,0,0.45)",
+          paddingTop: 20,
+          paddingBottom: 28,
+          paddingLeft: 48,
+          paddingRight: 48,
+          textAlign: "center" as const,
+        }}>
+          <div style={{
+            fontSize: 52,
+            fontWeight: 500,
+            fontFamily: "Hiragino Sans, sans-serif",
+            letterSpacing: "0.18em",
+            color: "#FFFFFF",
+            display: "flex",
+            justifyContent: "center",
+          }}>
+            {animC(frame, "特選ロースかつ定食", 10)}
+          </div>
+        </div>
+      </AbsoluteFill>
+    ),
+  },
+  // Scene 9 — 箸上げ（5秒）テロップなし
+  {
+    file: "scene9.mp4",
+    durationInFrames: 152,
+  },
+  // Scene 10 — 満足の笑顔（5秒）P2 中央ブランドロゴ型（下部配置）
+  {
+    file: "scene10.mp4",
+    durationInFrames: 152,
+    render: (frame: number) => (
+      <AbsoluteFill style={{
+        justifyContent: "flex-end",
+        alignItems: "center",
+        paddingBottom: 200,
+      }}>
+        <div style={{
+          fontSize: 80,
+          fontWeight: 300,
+          fontFamily: "Hiragino Mincho ProN, YuMincho, serif",
+          letterSpacing: "0.2em",
+          color: "#2C1810",
+        }}>
+          {animC(frame, "しあわせの、一口")}
+        </div>
+      </AbsoluteFill>
+    ),
+  },
+  // Scene 11 — 店の外観（5秒）テロップなし
+  {
+    file: "scene11.mp4",
+    durationInFrames: 152,
+  },
+  // Scene 12 — エンドカード（黒バック・7秒）P10 筆書き風
+  {
+    durationInFrames: 210,
+    render: (frame: number) => (
+      <AbsoluteFill style={{ backgroundColor: "black", justifyContent: "center", alignItems: "center" }}>
+        <div style={{ textAlign: "center" as const }}>
+          <div style={{
+            fontSize: 96,
+            fontWeight: 900,
+            fontFamily: "Hiragino Mincho ProN, YuMincho, serif",
+            letterSpacing: "-0.02em",
+            lineHeight: 1.1,
+            color: "#F5E6C8",
+            marginBottom: 48,
+          }}>
+            {animC(frame, "とんかつ のまど", 15)}
+          </div>
+          <div style={{
+            fontSize: 36,
+            fontWeight: 300,
+            fontFamily: "Hiragino Sans, sans-serif",
+            letterSpacing: "0.1em",
+            lineHeight: 2,
+            color: "rgba(255,255,255,0.7)",
+          }}>
+            {animC(frame, "ご予約・お問い合わせはこちら", 50)}
+          </div>
         </div>
       </AbsoluteFill>
     ),
@@ -170,18 +242,22 @@ export const AdVideo: React.FC = () => {
   let from = 0;
   return (
     <AbsoluteFill style={{ backgroundColor: "black" }}>
-      <Audio src={staticFile("bgm.mp3")} volume={0.15} />
-      <Audio src={staticFile("narration.wav")} volume={0.5} />
-      {clips.map((clip) => {
+      <Audio src={staticFile("bgm.mp3")} volume={0.35} />
+      <Sequence from={90}>
+        <Audio src={staticFile("narration.wav")} volume={0.5} />
+      </Sequence>
+      {clips.map((clip, idx) => {
         const start = from;
         from += clip.durationInFrames;
         return (
-          <Sequence key={clip.file} from={start} durationInFrames={clip.durationInFrames}>
+          <Sequence key={idx} from={start} durationInFrames={clip.durationInFrames}>
             <AbsoluteFill>
-              <OffthreadVideo
-                src={staticFile(clip.file)}
-                style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center center" }}
-              />
+              {clip.file && (
+                <OffthreadVideo
+                  src={staticFile(clip.file)}
+                  style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center center" }}
+                />
+              )}
               <Telop {...clip} />
             </AbsoluteFill>
           </Sequence>
