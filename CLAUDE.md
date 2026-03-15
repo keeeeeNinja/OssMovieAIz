@@ -30,7 +30,7 @@ OssMovieAIz/
 - Remotion Studio: `npm run studio` → http://localhost:3000
 - レンダー: `npm run render` → `out/ad-video.mp4`
 - 音声生成: `python3 scripts/generate_tts.py --text "..." --voicevox-id ID --output public/narration.wav`
-- BGM生成: `python3 scripts/generate_music.py --caption "..." --duration 30 --output public/bgm.mp3`
+- BGM生成: `python3 scripts/generate_music.py --caption "..." --duration 30 --output public/bgm.mp3`（30秒超は自動分割。`--caption2`で後半の雰囲気を変更可）
 - VOICEVOX: GUIアプリ起動必須（localhost:50021）
 - ACE-Step: APIサーバー起動必須（localhost:8001）
 - 動画メタデータ: `ffmpeg -i <file>`
