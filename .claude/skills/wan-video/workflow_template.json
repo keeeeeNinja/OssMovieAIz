@@ -1,0 +1,115 @@
+{
+  "1": {
+    "class_type": "GGUFLoaderKJ",
+    "inputs": {
+      "unet_name": "wan2.1-i2v-14b-480p-Q5_K_M.gguf",
+      "attention_override": "sageattn"
+    }
+  },
+  "2": {
+    "class_type": "CLIPLoader",
+    "inputs": {
+      "clip_name": "umt5_xxl_fp8_e4m3fn_scaled.safetensors",
+      "type": "wan"
+    }
+  },
+  "3": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "[PROMPT]",
+      "clip": ["2", 0]
+    }
+  },
+  "4": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "[NEGATIVE]",
+      "clip": ["2", 0]
+    }
+  },
+  "5": {
+    "class_type": "CLIPVisionLoader",
+    "inputs": {
+      "clip_name": "clip_vision_h.safetensors"
+    }
+  },
+  "6": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "[IMAGE_NAME]"
+    }
+  },
+  "7": {
+    "class_type": "CLIPVisionEncode",
+    "inputs": {
+      "crop": "center",
+      "clip_vision": ["5", 0],
+      "image": ["6", 0]
+    }
+  },
+  "10": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "wan_2.1_vae.safetensors"
+    }
+  },
+  "11": {
+    "class_type": "WanVideoTeaCacheKJ",
+    "inputs": {
+      "model": ["1", 0],
+      "rel_l1_thresh": 0.3,
+      "start_percent": 0.1,
+      "end_percent": 1.0,
+      "cache_device": "offload_device",
+      "coefficients": "[COEFFICIENTS]"
+    }
+  },
+  "8": {
+    "class_type": "WanImageToVideo",
+    "inputs": {
+      "positive": ["3", 0],
+      "negative": ["4", 0],
+      "vae": ["10", 0],
+      "width": "[WIDTH]",
+      "height": "[HEIGHT]",
+      "length": 81,
+      "batch_size": 1,
+      "clip_vision_output": ["7", 0],
+      "start_image": ["6", 0]
+    }
+  },
+  "12": {
+    "class_type": "KSampler",
+    "inputs": {
+      "model": ["11", 0],
+      "positive": ["8", 0],
+      "negative": ["8", 1],
+      "latent_image": ["8", 2],
+      "seed": "[SEED_VALUE]",
+      "steps": 30,
+      "cfg": 3.0,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1.0
+    }
+  },
+  "13": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": ["12", 0],
+      "vae": ["10", 0]
+    }
+  },
+  "9": {
+    "class_type": "VHS_VideoCombine",
+    "inputs": {
+      "images": ["13", 0],
+      "frame_rate": 16,
+      "loop_count": 0,
+      "filename_prefix": "[OUTPUT_PREFIX]",
+      "format": "video/h264-mp4",
+      "pingpong": false,
+      "save_output": true
+    }
+  }
+}

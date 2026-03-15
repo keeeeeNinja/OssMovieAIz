@@ -10,7 +10,7 @@ OssMovieAIz/
 ├── public/               # Remotion用アセット（動画・bgm.mp3・narration.wav）
 ├── src/compositions/
 │   └── AdVideo.tsx       # Remotionコンポジション
-├── skills/               # スキル定義
+├── .claude/skills/       # スキル定義（Claude Code自動検出）
 │   ├── wan-video/        # Wan 2.1 I2V（メイン動画生成エンジン）
 │   ├── kling-video/      # Kling（fal.ai経由）
 │   ├── pixverse-prompt/  # PixVerse
@@ -86,10 +86,10 @@ OssMovieAIz/
 | `/telop-design` | bannnner.comパターン辞書を使ったテロップデザイン設計・AdVideo.tsx実装 |
 
 ## telop-designスキルの設計
-- パターン辞書: `skills/telop-design/patterns.md`（10パターン、CSS実装例付き）
-- マッチングルール: `skills/telop-design/matching-rules.md`（映像→パターン判定フロー）
-- フォント・色・装飾: `skills/telop-design/fonts-colors-decorations.md`
-- 代表バナー画像: `skills/telop-design/banners/`（P1〜P10各1枚）
+- パターン辞書: `.claude/skills/telop-design/patterns.md`（10パターン、CSS実装例付き）
+- マッチングルール: `.claude/skills/telop-design/matching-rules.md`（映像→パターン判定フロー）
+- フォント・色・装飾: `.claude/skills/telop-design/fonts-colors-decorations.md`
+- 代表バナー画像: `.claude/skills/telop-design/banners/`（P1〜P10各1枚）
 - AdVideo.tsxはインラインスタイル構成（clips配列 + render関数で全パターン対応）
 - **デフォルトアニメーション**: 全シーン共通で `animC`（タイプライター式blurフェードイン）
 - **AdVideo.tsx実装時はWriteツールを使わず、Bashのヒアドキュメント（`cat <<'EOF'`）で上書きする**
