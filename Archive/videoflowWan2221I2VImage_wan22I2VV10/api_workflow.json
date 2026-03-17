@@ -1,0 +1,727 @@
+{
+  "8": {
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "Frames"
+    },
+    "inputs": {
+      "samples": [
+        "631",
+        0
+      ],
+      "vae": [
+        "365",
+        0
+      ]
+    }
+  },
+  "289": {
+    "class_type": "easy loraStack",
+    "_meta": {
+      "title": "High Noise LoRAs"
+    },
+    "inputs": {
+      "toggle": true,
+      "mode": "simple",
+      "num_loras": 1,
+      "lora_1_name": "None",
+      "lora_1_strength": 1,
+      "lora_1_model_strength": 1,
+      "lora_1_clip_strength": 1,
+      "lora_2_name": "None",
+      "lora_2_strength": 1,
+      "lora_2_model_strength": 1,
+      "lora_2_clip_strength": 1,
+      "lora_3_name": "None",
+      "lora_3_strength": 1.0000000000000002,
+      "lora_3_model_strength": 1,
+      "lora_3_clip_strength": 1,
+      "lora_4_name": "None",
+      "lora_4_strength": 1.0000000000000002,
+      "lora_4_model_strength": 1,
+      "lora_4_clip_strength": 1,
+      "lora_5_name": "None",
+      "lora_5_strength": 1,
+      "lora_5_model_strength": 1,
+      "lora_5_clip_strength": 1,
+      "lora_6_name": "None",
+      "lora_6_strength": 1,
+      "lora_6_model_strength": 1,
+      "lora_6_clip_strength": 1,
+      "lora_7_name": "None",
+      "lora_7_strength": 1,
+      "lora_7_model_strength": 1,
+      "lora_7_clip_strength": 1,
+      "lora_8_name": "None",
+      "lora_8_strength": 1,
+      "lora_8_model_strength": 1,
+      "lora_8_clip_strength": 1,
+      "lora_9_name": "None",
+      "lora_9_strength": 1,
+      "lora_9_model_strength": 1,
+      "lora_9_clip_strength": 1,
+      "lora_10_name": "None",
+      "lora_10_strength": 1,
+      "lora_10_model_strength": 1,
+      "lora_10_clip_strength": 1
+    }
+  },
+  "290": {
+    "class_type": "easy loraStackApply",
+    "_meta": {
+      "title": "Loras"
+    },
+    "inputs": {
+      "lora_stack": [
+        "289",
+        0
+      ],
+      "model": [
+        "624",
+        0
+      ]
+    }
+  },
+  "365": {
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "VAELoader"
+    },
+    "inputs": {
+      "vae_name": "wan_2.1_vae.safetensors"
+    }
+  },
+  "523": {
+    "class_type": "UpscaleModelLoader",
+    "_meta": {
+      "title": "UpscaleModelLoader"
+    },
+    "inputs": {
+      "model_name": "4x_UniversalUpscalerV2-Sharp_101000_G.pth"
+    }
+  },
+  "524": {
+    "class_type": "ImageUpscaleWithModel",
+    "_meta": {
+      "title": "Upscale"
+    },
+    "inputs": {
+      "upscale_model": [
+        "523",
+        0
+      ],
+      "image": [
+        "8",
+        0
+      ]
+    }
+  },
+  "529": {
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "pos"
+    },
+    "inputs": {
+      "clip": [
+        "622",
+        1
+      ],
+      "text": "A young woman in a white bathrobe gently applying red lipstick, her lips parting slightly with a soft confident smile. Warm golden bathroom lighting reflecting off the mirror behind her. Slow push-in camera. Soft skin glow, cinematic beauty shot, high quality, cinematic lighting, detailed, 4K."
+    }
+  },
+  "530": {
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "neg"
+    },
+    "inputs": {
+      "clip": [
+        "550",
+        0
+      ],
+      "text": "blurry, distorted, low quality, shaky, deformed hands, extra fingers, watermark, text overlay"
+    }
+  },
+  "549": {
+    "class_type": "UNETLoader",
+    "_meta": {
+      "title": "Load High Noise safetensors Model"
+    },
+    "inputs": {
+      "unet_name": "Wan2.2-I2V-A14B-HighNoise-Q5_K_M.gguf",
+      "weight_dtype": "default"
+    }
+  },
+  "550": {
+    "class_type": "CLIPLoader",
+    "_meta": {
+      "title": "CLIPLoader"
+    },
+    "inputs": {
+      "clip_name": "umt5_xxl_fp8_e4m3fn_scaled.safetensors",
+      "type": "wan",
+      "device": "default"
+    }
+  },
+  "553": {
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "LoadImage"
+    },
+    "inputs": {
+      "image": "sean2.png",
+      "upload": "image"
+    }
+  },
+  "554": {
+    "class_type": "WanImageToVideo",
+    "_meta": {
+      "title": "WanImageToVideo"
+    },
+    "inputs": {
+      "positive": [
+        "529",
+        0
+      ],
+      "negative": [
+        "530",
+        0
+      ],
+      "vae": [
+        "365",
+        0
+      ],
+      "start_image": [
+        "553",
+        0
+      ],
+      "width": 800,
+      "height": 1200,
+      "length": [
+        "567",
+        0
+      ],
+      "batch_size": 1
+    }
+  },
+  "555": {
+    "class_type": "WanVideoNAG",
+    "_meta": {
+      "title": "WanVideoNAG"
+    },
+    "inputs": {
+      "model": [
+        "610",
+        0
+      ],
+      "conditioning": [
+        "530",
+        0
+      ],
+      "nag_scale": 11,
+      "nag_alpha": 0.25,
+      "nag_tau": 2.5,
+      "input_type": "default"
+    }
+  },
+  "556": {
+    "class_type": "ModelSamplingSD3",
+    "_meta": {
+      "title": "Shift (default 8.0)"
+    },
+    "inputs": {
+      "model": [
+        "622",
+        0
+      ],
+      "shift": 8
+    }
+  },
+  "557": {
+    "class_type": "VHS_VideoCombine",
+    "_meta": {
+      "title": "Combine Images to Video"
+    },
+    "inputs": {
+      "images": [
+        "8",
+        0
+      ],
+      "frame_rate": 16.0,
+      "loop_count": 0,
+      "filename_prefix": "sean2_wan22_lightning",
+      "format": "video/h264-mp4",
+      "pix_fmt": "yuv420p",
+      "crf": 19,
+      "save_metadata": true,
+      "trim_to_audio": false,
+      "pingpong": false,
+      "save_output": true
+    }
+  },
+  "560": {
+    "class_type": "RIFE VFI",
+    "_meta": {
+      "title": "RIFE VFI (default: rife47 or rife49)"
+    },
+    "inputs": {
+      "frames": [
+        "581",
+        0
+      ],
+      "ckpt_name": "rife49.pth",
+      "clear_cache_after_n_frames": 10,
+      "multiplier": [
+        "584",
+        0
+      ],
+      "fast_mode": false,
+      "ensemble": true,
+      "scale_factor": 1,
+      "dtype": "float16",
+      "batch_size": 4,
+      "torch_compile": false
+    }
+  },
+  "565": {
+    "class_type": "easy int",
+    "_meta": {
+      "title": "Video Length in Seconds (1 to 5)"
+    },
+    "inputs": {
+      "value": 5
+    }
+  },
+  "566": {
+    "class_type": "easy mathInt",
+    "_meta": {
+      "title": "length"
+    },
+    "inputs": {
+      "a": [
+        "565",
+        0
+      ],
+      "b": 16,
+      "operation": "multiply"
+    }
+  },
+  "567": {
+    "class_type": "easy mathInt",
+    "_meta": {
+      "title": "length"
+    },
+    "inputs": {
+      "a": [
+        "566",
+        0
+      ],
+      "b": 1,
+      "operation": "add"
+    }
+  },
+  "574": {
+    "class_type": "easy float",
+    "_meta": {
+      "title": "Upscale Factor (default 2: 2x)"
+    },
+    "inputs": {
+      "value": 2.0000000000000004
+    }
+  },
+  "581": {
+    "class_type": "ImageScale",
+    "_meta": {
+      "title": "Resize Video Frames"
+    },
+    "inputs": {
+      "image": [
+        "524",
+        0
+      ],
+      "upscale_method": "lanczos",
+      "width": 1600,
+      "height": 2400,
+      "crop": "disabled"
+    }
+  },
+  "584": {
+    "class_type": "easy int",
+    "_meta": {
+      "title": "Frame Multiplier (2 doubles fps)"
+    },
+    "inputs": {
+      "value": 2
+    }
+  },
+  "586": {
+    "class_type": "easy int",
+    "_meta": {
+      "title": "Initial Frame Rate (default 16)"
+    },
+    "inputs": {
+      "value": 16
+    }
+  },
+  "595": {
+    "class_type": "VHS_VideoCombine",
+    "_meta": {
+      "title": "Combine Images to Video"
+    },
+    "inputs": {
+      "images": [
+        "560",
+        0
+      ],
+      "frame_rate": 32.0,
+      "loop_count": 0,
+      "filename_prefix": "sean2_wan22_lightning_upscaled",
+      "format": "video/h264-mp4",
+      "pix_fmt": "yuv420p",
+      "crf": 19,
+      "save_metadata": true,
+      "trim_to_audio": false,
+      "pingpong": false,
+      "save_output": true
+    }
+  },
+  "610": {
+    "class_type": "UnetLoaderGGUF",
+    "_meta": {
+      "title": "Load High Noise GGUF Model"
+    },
+    "inputs": {
+      "unet_name": "Wan2.2-I2V-A14B-HighNoise-Q5_K_M.gguf"
+    }
+  },
+  "611": {
+    "class_type": "UnetLoaderGGUF",
+    "_meta": {
+      "title": "Load Low Noise GGUF Model"
+    },
+    "inputs": {
+      "unet_name": "Wan2.2-I2V-A14B-LowNoise-Q5_K_M.gguf"
+    }
+  },
+  "612": {
+    "class_type": "UNETLoader",
+    "_meta": {
+      "title": "Load Low Noise safetensors Model"
+    },
+    "inputs": {
+      "unet_name": "Wan2.2-I2V-A14B-LowNoise-Q5_K_M.gguf",
+      "weight_dtype": "default"
+    }
+  },
+  "616": {
+    "class_type": "WanVideoNAG",
+    "_meta": {
+      "title": "WanVideoNAG"
+    },
+    "inputs": {
+      "model": [
+        "611",
+        0
+      ],
+      "conditioning": [
+        "530",
+        0
+      ],
+      "nag_scale": 11,
+      "nag_alpha": 0.25,
+      "nag_tau": 2.5,
+      "input_type": "default"
+    }
+  },
+  "621": {
+    "class_type": "easy loraStackApply",
+    "_meta": {
+      "title": "Loras"
+    },
+    "inputs": {
+      "lora_stack": [
+        "640",
+        0
+      ],
+      "model": [
+        "628",
+        0
+      ]
+    }
+  },
+  "622": {
+    "class_type": "easy loraStackApply",
+    "_meta": {
+      "title": "Loras"
+    },
+    "inputs": {
+      "lora_stack": [
+        "289",
+        0
+      ],
+      "model": [
+        "610",
+        0
+      ],
+      "optional_clip": [
+        "550",
+        0
+      ]
+    }
+  },
+  "624": {
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": {
+      "title": "Lightning LoRA High Noise"
+    },
+    "inputs": {
+      "model": [
+        "555",
+        0
+      ],
+      "lora_name": "Wan2.2-Lightning_I2V-A14B-4steps-lora_HIGH_fp16.safetensors",
+      "strength_model": 1
+    }
+  },
+  "628": {
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": {
+      "title": "Lightning LoRA Low Noise"
+    },
+    "inputs": {
+      "model": [
+        "616",
+        0
+      ],
+      "lora_name": "Wan2.2-Lightning_I2V-A14B-4steps-lora_LOW_fp16.safetensors",
+      "strength_model": 1
+    }
+  },
+  "629": {
+    "class_type": "KSamplerAdvanced",
+    "_meta": {
+      "title": "High Noise no Lightning"
+    },
+    "inputs": {
+      "model": [
+        "556",
+        0
+      ],
+      "positive": [
+        "554",
+        0
+      ],
+      "negative": [
+        "554",
+        1
+      ],
+      "latent_image": [
+        "554",
+        2
+      ],
+      "add_noise": "enable",
+      "noise_seed": 1,
+      "steps": [
+        "634",
+        0
+      ],
+      "cfg": 2.5,
+      "sampler_name": "euler",
+      "scheduler": "beta",
+      "start_at_step": 0,
+      "end_at_step": [
+        "632",
+        0
+      ],
+      "return_with_leftover_noise": "enable"
+    }
+  },
+  "630": {
+    "class_type": "KSamplerAdvanced",
+    "_meta": {
+      "title": "High Noise with Lightning"
+    },
+    "inputs": {
+      "model": [
+        "635",
+        0
+      ],
+      "positive": [
+        "554",
+        0
+      ],
+      "negative": [
+        "554",
+        1
+      ],
+      "latent_image": [
+        "629",
+        0
+      ],
+      "add_noise": "disable",
+      "noise_seed": 0,
+      "steps": [
+        "634",
+        0
+      ],
+      "cfg": 1,
+      "sampler_name": "euler",
+      "scheduler": "beta",
+      "start_at_step": [
+        "632",
+        0
+      ],
+      "end_at_step": [
+        "633",
+        0
+      ],
+      "return_with_leftover_noise": "enable"
+    }
+  },
+  "631": {
+    "class_type": "KSamplerAdvanced",
+    "_meta": {
+      "title": "Low Noise with Lightning"
+    },
+    "inputs": {
+      "model": [
+        "636",
+        0
+      ],
+      "positive": [
+        "554",
+        0
+      ],
+      "negative": [
+        "554",
+        1
+      ],
+      "latent_image": [
+        "630",
+        0
+      ],
+      "add_noise": "disable",
+      "noise_seed": 0,
+      "steps": [
+        "634",
+        0
+      ],
+      "cfg": 1,
+      "sampler_name": "euler",
+      "scheduler": "beta",
+      "start_at_step": [
+        "633",
+        0
+      ],
+      "end_at_step": [
+        "634",
+        0
+      ],
+      "return_with_leftover_noise": "disable"
+    }
+  },
+  "632": {
+    "class_type": "easy int",
+    "_meta": {
+      "title": "1st End Step (default 4)"
+    },
+    "inputs": {
+      "value": 4
+    }
+  },
+  "633": {
+    "class_type": "easy int",
+    "_meta": {
+      "title": "2nd End Step (default 8)"
+    },
+    "inputs": {
+      "value": 8
+    }
+  },
+  "634": {
+    "class_type": "easy int",
+    "_meta": {
+      "title": "Last End Step (default 12)"
+    },
+    "inputs": {
+      "value": 12
+    }
+  },
+  "635": {
+    "class_type": "ModelSamplingSD3",
+    "_meta": {
+      "title": "Shift (default 8.0)"
+    },
+    "inputs": {
+      "model": [
+        "290",
+        0
+      ],
+      "shift": 8
+    }
+  },
+  "636": {
+    "class_type": "ModelSamplingSD3",
+    "_meta": {
+      "title": "Shift (default 8.0)"
+    },
+    "inputs": {
+      "model": [
+        "621",
+        0
+      ],
+      "shift": 8
+    }
+  },
+  "640": {
+    "class_type": "easy loraStack",
+    "_meta": {
+      "title": "Low Noise LoRAs"
+    },
+    "inputs": {
+      "toggle": true,
+      "mode": "simple",
+      "num_loras": 1,
+      "lora_1_name": "None",
+      "lora_1_strength": 1,
+      "lora_1_model_strength": 1,
+      "lora_1_clip_strength": 1,
+      "lora_2_name": "None",
+      "lora_2_strength": 1,
+      "lora_2_model_strength": 1,
+      "lora_2_clip_strength": 1,
+      "lora_3_name": "None",
+      "lora_3_strength": 1,
+      "lora_3_model_strength": 1,
+      "lora_3_clip_strength": 1,
+      "lora_4_name": "None",
+      "lora_4_strength": 1.0000000000000002,
+      "lora_4_model_strength": 1,
+      "lora_4_clip_strength": 1,
+      "lora_5_name": "None",
+      "lora_5_strength": 1,
+      "lora_5_model_strength": 1,
+      "lora_5_clip_strength": 1,
+      "lora_6_name": "None",
+      "lora_6_strength": 1,
+      "lora_6_model_strength": 1,
+      "lora_6_clip_strength": 1,
+      "lora_7_name": "None",
+      "lora_7_strength": 1,
+      "lora_7_model_strength": 1,
+      "lora_7_clip_strength": 1,
+      "lora_8_name": "None",
+      "lora_8_strength": 1,
+      "lora_8_model_strength": 1,
+      "lora_8_clip_strength": 1,
+      "lora_9_name": "None",
+      "lora_9_strength": 1,
+      "lora_9_model_strength": 1,
+      "lora_9_clip_strength": 1,
+      "lora_10_name": "None",
+      "lora_10_strength": 1,
+      "lora_10_model_strength": 1,
+      "lora_10_clip_strength": 1
+    }
+  }
+}
