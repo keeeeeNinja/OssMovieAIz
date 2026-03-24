@@ -1,0 +1,39 @@
+name: Refresh Instagram Token
+
+on:
+  schedule:
+    # 毎月1日と15日に実行（60日有効のトークンを余裕をもって更新）
+    - cron: '0 0 1,15 * *'
+  workflow_dispatch:
+
+jobs:
+  refresh-token:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Refresh long-lived token
+        env:
+          META_APP_ID: ${{ secrets.META_APP_ID }}
+          META_APP_SECRET: ${{ secrets.META_APP_SECRET }}
+          IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          # 現在のトークンを使って新しい長期トークンを取得
+          RESPONSE=$(curl -s "https://graph.facebook.com/v21.0/oauth/access_token?\
+          grant_type=fb_exchange_token&\
+          client_id=${META_APP_ID}&\
+          client_secret=${META_APP_SECRET}&\
+          fb_exchange_token=${IG_ACCESS_TOKEN}")
+
+          NEW_TOKEN=$(echo "$RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+
+          if [ -z "$NEW_TOKEN" ]; then
+            echo "Error: トークン更新失敗"
+            echo "$RESPONSE"
+            exit 1
+          fi
+
+          echo "トークン更新成功 (先頭10文字: ${NEW_TOKEN:0:10}...)"
+
+          # GitHub Secrets を更新（gh CLI使用）
+          gh secret set IG_ACCESS_TOKEN --body "$NEW_TOKEN" --repo "$GITHUB_REPOSITORY"
+          echo "GitHub Secret 更新完了"

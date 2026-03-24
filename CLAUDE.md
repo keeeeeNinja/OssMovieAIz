@@ -49,7 +49,8 @@ OssMovieAIz/
 3. `/video-script` → テロップ・ナレーション原稿 → VOICEVOX音声生成 → `public/narration.wav`
 4. `/telop-design` → bannnner.comパターン辞書からデザイン導出 → AdVideo.tsx実装
 5. BGM: `python3 scripts/generate_music.py` → `public/bgm.mp3`
-6. クリップを `public/` にコピー → `npm run render`
+6. エフェクト提案: `effects.md` のテンプレート（T1〜T9）から映像に合うエフェクトを選び、おすすめを提案 → 承認後にAdVideo.tsxへ組み込む
+7. クリップを `public/` にコピー → `npm run render`
 
 ## クリップ生成エンジンの使い分け
 | エンジン | 強み | コスト | スキル |
