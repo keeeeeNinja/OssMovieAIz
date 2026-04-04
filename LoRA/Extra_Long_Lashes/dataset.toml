@@ -1,0 +1,20 @@
+[general]
+resolution = [1024, 1024]
+caption_extension = ".txt"
+batch_size = 1
+enable_bucket = true
+
+# 学習画像
+[[datasets]]
+
+[[datasets.subsets]]
+image_dir = "/root/datasets/UrodaLash/images"
+num_repeats = 5
+caption_extension = ".txt"
+
+# 正則化画像
+[[datasets.subsets]]
+image_dir = "/root/datasets/UrodaLash/reg_images"
+num_repeats = 1
+is_reg = true
+caption_extension = ".txt"

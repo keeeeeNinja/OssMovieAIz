@@ -6,6 +6,7 @@ import { GlitterEffect, GLITTER_DURATION } from "./compositions/GlitterEffect";
 import { LensFlareEffect, LENS_FLARE_DURATION } from "./compositions/LensFlareEffect";
 import { LipParticleEffect, LIP_PARTICLE_DURATION } from "./compositions/LipParticleEffect";
 import { ChromaticEffect, CHROMATIC_DURATION } from "./compositions/ChromaticEffect";
+import { ParticleEffect } from "./compositions/ParticleEffect";
 import { Particle3DEffect, PARTICLE_3D_DURATION } from "./compositions/Particle3DEffect";
 import { GSAPLineEffect, GSAP_LINE_DURATION } from "./compositions/GSAPLineEffect";
 import { GSAPMaskRevealEffect, GSAP_MASK_REVEAL_DURATION } from "./compositions/GSAPMaskRevealEffect";
@@ -17,7 +18,7 @@ export const RemotionRoot: React.FC = () => {
       <Composition
         id="AdVideo"
         component={AdVideo}
-        durationInFrames={450}
+        durationInFrames={585}
         fps={30}
         width={1080}
         height={1920}
@@ -90,6 +91,14 @@ export const RemotionRoot: React.FC = () => {
         id="ChromaticEffect"
         component={ChromaticEffect}
         durationInFrames={CHROMATIC_DURATION}
+        fps={30}
+        width={1080}
+        height={1920}
+      />
+      <Composition
+        id="ParticleEffect"
+        component={ParticleEffect}
+        durationInFrames={300}
         fps={30}
         width={1080}
         height={1920}

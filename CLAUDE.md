@@ -18,8 +18,8 @@ OssMovieAIz/
 │   ├── video-script/     # テロップ・ナレーション・音声生成
 │   └── telop-design/     # テロップデザイン設計・実装
 ├── scripts/
-│   ├── generate_tts.py   # VOICEVOX音声生成
-│   └── generate_music.py # ACE-Step BGM生成
+│   ├── generate_tts_irodori.py  # Irodori-TTS VoiceDesign音声生成
+│   └── generate_music.py        # ACE-Step BGM生成
 ├── remotion.config.ts
 ├── tsconfig.json
 ├── package.json
@@ -29,28 +29,35 @@ OssMovieAIz/
 ## コマンド
 - Remotion Studio: `npm run studio` → http://localhost:3000
 - レンダー: `npm run render` → `out/ad-video.mp4`
-- 音声生成: `python3 scripts/generate_tts.py --text "..." --voicevox-id ID --output public/narration.wav`
+- 音声生成: `python3 scripts/generate_tts_irodori.py --text "..." --caption "声の説明" --output public/narration.wav`
 - BGM生成: `python3 scripts/generate_music.py --caption "..." --duration 30 --output public/bgm.mp3`（30秒超は自動分割。`--caption2`で後半の雰囲気を変更可）
-- VOICEVOX: GUIアプリ起動必須（localhost:50021）
 - ACE-Step: APIサーバー起動必須（localhost:8001）
 - 動画メタデータ: `ffmpeg -i <file>`
 - フレーム抽出: `ffmpeg -i <file> -vf "select=eq(n\,0)" -vsync vr frame.png`
 
 ## 絶対ルール
-- **テロップは毎回ゼロから設計する。前回の動画のフォント・サイズ・配置・色・装飾を絶対に流用しない**
-- bannnner.com のバナーを「元ネタ」として使い、そのデザイン処理をそのまま適用する
-- 各シーンの参考バナー画像をユーザーに提示し、承認を得てから実装する
+- **テロップはbs分析結果（配置・色・フォント）をそのまま使う。前回の動画から流用しない**
 - デザインの良し悪しは `デザインの極意書.md` のチェックリストで判断する
 - 勝手に大きく変えない。方針は必ずユーザーに確認する
 
-## 動画制作フロー
-1. 素材画像を `作業中動画/` に入れる
-2. クリップ生成: `/wan-video`（Wan 2.1）または `/kling-video` `/runway-video` `/pixverse-prompt`
-3. `/video-script` → テロップ・ナレーション原稿 → VOICEVOX音声生成 → `public/narration.wav`
-4. `/telop-design` → bannnner.comパターン辞書からデザイン導出 → AdVideo.tsx実装
-5. BGM: `python3 scripts/generate_music.py` → `public/bgm.mp3`
-6. エフェクト提案: `effects.md` のテンプレート（T1〜T9）から映像に合うエフェクトを選び、おすすめを提案 → 承認後にAdVideo.tsxへ組み込む
-7. クリップを `public/` にコピー → `npm run render`
+## 動画制作フロー（デフォルト）
+1. **参考動画の提示**: ユーザーがバズ動画のURLを提示する
+2. **bs分析**: buzz-skeleton（bs）で参考動画を分析 → カット割り・テンポ・トランジション・テロップスタイルを抽出
+3. **テロップ再現（丸パクリ）**: bs分析結果のテロップスタイル（配置・色・フォント・サイズ・文言）をそのままAdVideo.tsxに実装する。
+   1. AdVideo.tsxに実装（バズ動画の原文をそのまま使う）
+   2. `npm run studio` でRemotionを起動し、ユーザーに確認してもらう
+   3. ユーザー承認後、次のステップへ進む
+   ※ テロップの文言はStep 8で差し替える
+4. **テーマ確認**: ユーザーがこの動画のテーマを伝える
+5. **ストーリー設計**: bs分析結果＋テーマからストーリー構成を設計（シーン数・各シーンの尺・感情フロー・カメラワーク）→ ユーザー承認
+6. **静止画プロンプト作成**: 各シーンのI2V用静止画を生成するプロンプトを作成 → 画像生成（Flux等）
+7. **クリップ生成**: `/wan-video`（Wan 2.1）または `/kling-video` `/runway-video` `/pixverse-prompt` で動画クリップを生成
+8. **ナレーション・テロップ文言差し替え・BGM**:
+   - `/video-script` → テロップ文言差し替え・ナレーション原稿 → Irodori-TTS音声生成 → `public/narration.wav`
+   - テロップスタイル（配置・色・フォント・サイズ）はStep 3で実装済み。ここでは文言のみ差し替える
+   - BGM: `python3 scripts/generate_music.py` → `public/bgm.mp3`
+   - **ナレーション尺の目安: 動画尺 - 3秒**（動画と同じ長さだと余韻がなくなる）
+9. **合成・レンダー**: クリップを `public/` にコピー → Remotionで合成 → `npm run render`
 
 ## クリップ生成エンジンの使い分け
 | エンジン | 強み | コスト | スキル |
@@ -79,26 +86,28 @@ OssMovieAIz/
 ## スキル一覧
 | スキル | 用途 |
 |-------|------|
+| **bs** (buzz-skeleton) | 参考バズ動画を分析 → カット割り・テンポ・テロップスタイルを抽出。動画制作フローのStep 2で使用 |
 | `/wan-video` | Wan 2.1 I2VでRunPod上のComfyUI経由でクリップ生成。SSH+API |
 | `/kling-video` | Kling v2.1/v3でクリップ生成（fal.ai経由） |
 | `/runway-video` | Runway gen4_turbo/gen4.5でクリップ生成（MCP経由） |
 | `/pixverse-prompt` | PixVerse Image-to-Video / Fusion Videoのプロンプト生成 |
-| `/video-script` | テロップ文言・ナレーション・音声生成（VOICEVOX） |
-| `/telop-design` | bannnner.comパターン辞書を使ったテロップデザイン設計・AdVideo.tsx実装 |
+| `/video-script` | テロップ文言・ナレーション・Irodori-TTS音声生成 |
+| `/telop-design` | bs抽出テロップスタイルをベースにデザイン設計・AdVideo.tsx実装 |
 
 ## telop-designスキルの設計
-- パターン辞書: `.claude/skills/telop-design/patterns.md`（10パターン、CSS実装例付き）
-- マッチングルール: `.claude/skills/telop-design/matching-rules.md`（映像→パターン判定フロー）
-- フォント・色・装飾: `.claude/skills/telop-design/fonts-colors-decorations.md`
-- 代表バナー画像: `.claude/skills/telop-design/banners/`（P1〜P10各1枚）
+- **テロップスタイルはbs分析結果をそのまま使う**（配置・色・フォント・サイズ）
+- パターン辞書: `.claude/skills/telop-design/patterns.md`（参考用。bs結果が不十分な場合の補完に使う）
+- フォント・色・装飾: `.claude/skills/telop-design/fonts-colors-decorations.md`（実装時の技術リファレンス）
 - AdVideo.tsxはインラインスタイル構成（clips配列 + render関数で全パターン対応）
 - **デフォルトアニメーション**: 全シーン共通で `animC`（タイプライター式blurフェードイン）
+- **テロップ1行制約**: バズ動画が1行テロップの場合、オリジナルのテキストが長くても改行せずフォントサイズを縮小して必ず1行に収める。`calcFontSize()`で基準文字数・基準サイズから自動算出する
 - **AdVideo.tsx実装時はWriteツールを使わず、Bashのヒアドキュメント（`cat <<'EOF'`）で上書きする**
 
 ## Remotion
 - 縦型 1080×1920 / 30fps
 - AdVideo.tsx: clips配列でSequenceを繋ぐ
 - 音声: `public/bgm.mp3` + `public/narration.wav`
+- **ナレーション音量のデフォルト: `volume={0.4}`**（1.0だと大きすぎる）
 - クリップ: `public/` に配置（staticFile参照）
 
 ## 参照ドキュメント
