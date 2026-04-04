@@ -1,5 +1,46 @@
 #!/bin/bash
 set -e
+
+# --- Quick restart mode: pip依存だけ再インストールしてComfyUI起動 ---
+# Network Volume付きPodの再起動時に使用（モデル・ノードは永続化済み）
+# 使い方: bash setup_comfyui.sh --restart
+if [ "$1" = "--restart" ]; then
+  echo '=== Quick Restart: pip依存の再インストール + ComfyUI起動 ==='
+  pkill -f 'python.*main.py' 2>/dev/null || true
+  sleep 2
+  fuser -k 8188/tcp 2>/dev/null || true
+
+  # SSH key
+  mkdir -p /root/.ssh
+  printf 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINIWVCzSc3DZBiFpqPrecairHRuFO5wkNBJlrvsVB4Cy a@b\n' > /root/.ssh/authorized_keys
+  chmod 700 /root/.ssh && chmod 600 /root/.ssh/authorized_keys
+
+  # pip依存（Pod再起動でリセットされるため毎回必要）
+  cd /workspace/ComfyUI
+  pip install -q -r requirements.txt
+  cd /workspace/ComfyUI/custom_nodes/ComfyUI-GGUF && pip install -q -r requirements.txt && pip install -q gguf
+  cd /workspace/ComfyUI/custom_nodes/ComfyUI-KJNodes && pip install -q -r requirements.txt 2>/dev/null || true
+  cd /workspace/ComfyUI/custom_nodes/ComfyUI-VideoHelperSuite && pip install -q -r requirements.txt 2>/dev/null || true
+  pip install -q sageattention 2>/dev/null || true
+
+  # ComfyUI起動
+  cd /workspace/ComfyUI
+  SAGE_FLAG=""
+  if python3 -c "import sageattention" 2>/dev/null; then
+    SAGE_FLAG="--use-sage-attention"
+  fi
+  python3 main.py --listen 0.0.0.0 --port 8188 $SAGE_FLAG > /workspace/comfyui.log 2>&1 &
+  echo "ComfyUI starting on port 8188 ${SAGE_FLAG:+(SageAttention ON)}..."
+  sleep 25
+  HTTP_CODE=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8188/)
+  if [ "$HTTP_CODE" = "200" ]; then
+    echo '=== Quick Restart COMPLETE! ComfyUI is ready. ==='
+  else
+    echo 'ComfyUI not responding yet. Check: tail -30 /workspace/comfyui.log'
+  fi
+  exit 0
+fi
+
 echo '============================================'
 echo '  ComfyUI + Wan 2.1 I2V Auto Setup'
 echo '  + SageAttention / TeaCache / MP4出力'
@@ -11,7 +52,15 @@ printf 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINIWVCzSc3DZBiFpqPrecairHRuFO5wkNBJl
 chmod 700 /root/.ssh && chmod 600 /root/.ssh/authorized_keys
 echo '[1/8] SSH key configured'
 
-# --- 2. ComfyUI ---
+# --- 2. Stop pre-installed ComfyUI (runpod-slim) if running ---
+echo '[2/8] Stopping pre-installed ComfyUI if running...'
+pkill -f 'python.*main.py' 2>/dev/null || true
+sleep 2
+fuser -k 8188/tcp 2>/dev/null || true
+sleep 1
+echo '  Port 8188 cleared'
+
+# --- 3. ComfyUI ---
 cd /workspace
 if [ ! -d "ComfyUI" ]; then
   git clone https://github.com/comfyanonymous/ComfyUI.git
@@ -20,7 +69,7 @@ cd ComfyUI
 git checkout master 2>/dev/null || true
 git pull origin master 2>/dev/null || true
 pip install -q -r requirements.txt
-echo '[2/8] ComfyUI installed (latest)'
+echo '[3/8] ComfyUI installed (latest)'
 
 # --- 3. Custom Nodes ---
 cd /workspace/ComfyUI/custom_nodes
@@ -31,6 +80,7 @@ cd /workspace/ComfyUI/custom_nodes
 # ComfyUI-GGUF（GGUFモデル読み込み）
 [ ! -d "ComfyUI-GGUF" ] && git clone https://github.com/city96/ComfyUI-GGUF.git
 cd /workspace/ComfyUI/custom_nodes/ComfyUI-GGUF && pip install -q -r requirements.txt
+pip install -q gguf
 
 # KJNodes（SageAttention + TeaCache）
 cd /workspace/ComfyUI/custom_nodes
@@ -42,10 +92,10 @@ cd /workspace/ComfyUI/custom_nodes
 [ ! -d "ComfyUI-VideoHelperSuite" ] && git clone https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite.git
 cd /workspace/ComfyUI/custom_nodes/ComfyUI-VideoHelperSuite && pip install -q -r requirements.txt 2>/dev/null || true
 
-echo '[3/8] Custom nodes installed (Manager, GGUF, KJNodes, VideoHelperSuite)'
+echo '[4/8] Custom nodes installed (Manager, GGUF, KJNodes, VideoHelperSuite)'
 
 # --- 4. SageAttention (pip) ---
-echo '[4/8] Installing SageAttention...'
+echo '[5/9] Installing SageAttention...'
 pip install -q sageattention 2>/dev/null || {
   echo '  SageAttention pip install failed, trying from source...'
   cd /workspace
@@ -121,8 +171,12 @@ python3 -c "import torch; print('CUDA:', torch.cuda.is_available())"
 
 # --- 8. Start ComfyUI ---
 cd /workspace/ComfyUI
-python3 main.py --listen 0.0.0.0 --port 8188 --use-sage-attention > /workspace/comfyui.log 2>&1 &
-echo '[8/8] ComfyUI starting on port 8188...'
+SAGE_FLAG=""
+if python3 -c "import sageattention" 2>/dev/null; then
+  SAGE_FLAG="--use-sage-attention"
+fi
+python3 main.py --listen 0.0.0.0 --port 8188 $SAGE_FLAG > /workspace/comfyui.log 2>&1 &
+echo "[8/8] ComfyUI starting on port 8188 ${SAGE_FLAG:+(SageAttention ON)}..."
 sleep 25
 HTTP_CODE=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8188/)
 if [ "$HTTP_CODE" = "200" ]; then
