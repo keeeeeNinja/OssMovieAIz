@@ -41,6 +41,7 @@ OssMovieAIz/
 - 勝手に大きく変えない。方針は必ずユーザーに確認する
 
 ## 動画制作フロー（デフォルト）
+0. **RunPod起動（バックグラウンド）**: 動画制作フローを開始する時点で、サブエージェント（`run_in_background: true`）で `/runpod-start` を実行する。メインはStep 1以降を並行して進める。クリップ生成（Step 7）までにPodが準備完了していればOK
 1. **参考動画の提示**: ユーザーがバズ動画のURLを提示する
 2. **bs分析**: buzz-skeleton（bs）で参考動画を分析 → カット割り・テンポ・トランジション・テロップスタイルを抽出
 3. **テロップ再現（丸パクリ）**: bs分析結果のテロップスタイル（配置・色・フォント・サイズ・文言）をそのままAdVideo.tsxに実装する。
@@ -50,7 +51,17 @@ OssMovieAIz/
    ※ テロップの文言はStep 8で差し替える
 4. **テーマ確認**: ユーザーがこの動画のテーマを伝える
 5. **ストーリー設計**: bs分析結果＋テーマからストーリー構成を設計（シーン数・各シーンの尺・感情フロー・カメラワーク）→ ユーザー承認
-6. **静止画プロンプト作成**: 各シーンのI2V用静止画を生成するプロンプトを作成 → 画像生成（Flux等）
+6. **静止画プロンプト作成**: 各シーンのI2V用静止画を生成するプロンプトを作成 → 画像生成（デフォルト: Flux on RunPod。fal.aiは使わない）
+   - 顔の一貫性はLoRAで担保する前提（PuLID・ペルソナデータ・flux-face-promptは使わない）
+   - プロンプトには顔の詳細を書かない。以下の要素のみ記述する：
+     - 衣装・服装
+     - ポーズ・動作
+     - 背景・ロケーション
+     - 照明・ライティング
+     - カメラアングル・構図
+     - 表情（簡潔に: smiling, surprised 等）
+     - 画風・品質指定（photorealistic, 8K, commercial photography 等）
+   - フロー: シーン設計 → プロンプト作成 → `scripts/flux_prompts.json` に保存 → `scripts/generate_flux_images.py` で一括生成
 7. **クリップ生成**: `/wan-video`（Wan 2.1）または `/kling-video` `/runway-video` `/pixverse-prompt` で動画クリップを生成
 8. **ナレーション・テロップ文言差し替え・BGM**:
    - `/video-script` → テロップ文言差し替え・ナレーション原稿 → Irodori-TTS音声生成 → `public/narration.wav`
@@ -93,6 +104,8 @@ OssMovieAIz/
 | `/pixverse-prompt` | PixVerse Image-to-Video / Fusion Videoのプロンプト生成 |
 | `/video-script` | テロップ文言・ナレーション・Irodori-TTS音声生成 |
 | `/telop-design` | bs抽出テロップスタイルをベースにデザイン設計・AdVideo.tsx実装 |
+| `/runpod-start` | RunPod API経由でPod起動 → SSH確認 → ComfyUIセットアップ → ssh.md更新まで一気通貫 |
+| `/flux-face-prompt` | 画像から顔を超詳細に分析し、Flux向け英語プロンプトを生成。※現在はLoRAベースの顔一貫性に移行したため通常フローでは使用しない |
 
 ## telop-designスキルの設計
 - **テロップスタイルはbs分析結果をそのまま使う**（配置・色・フォント・サイズ）
