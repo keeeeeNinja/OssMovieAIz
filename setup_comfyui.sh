@@ -12,7 +12,7 @@ if [ "$1" = "--restart" ]; then
 
   # SSH key
   mkdir -p /root/.ssh
-  printf 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINIWVCzSc3DZBiFpqPrecairHRuFO5wkNBJlrvsVB4Cy a@b\n' > /root/.ssh/authorized_keys
+  printf 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIN4MUZw6zwLp2XBi23QarOdtsbeLqiuAh/uKcBcSm4C9 allfork2011@gmail.com\n' > /root/.ssh/authorized_keys
   chmod 700 /root/.ssh && chmod 600 /root/.ssh/authorized_keys
 
   # pip依存（Pod再起動でリセットされるため毎回必要）
@@ -48,7 +48,7 @@ echo '============================================'
 
 # --- 1. SSH key (Claude Codeからリモート操作する場合) ---
 mkdir -p /root/.ssh
-printf 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINIWVCzSc3DZBiFpqPrecairHRuFO5wkNBJlrvsVB4Cy a@b\n' > /root/.ssh/authorized_keys
+printf 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIN4MUZw6zwLp2XBi23QarOdtsbeLqiuAh/uKcBcSm4C9 allfork2011@gmail.com\n' > /root/.ssh/authorized_keys
 chmod 700 /root/.ssh && chmod 600 /root/.ssh/authorized_keys
 echo '[1/8] SSH key configured'
 
