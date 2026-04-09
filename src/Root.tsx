@@ -1,6 +1,7 @@
 import React from "react";
 import { Composition } from "remotion";
 import { AdVideo } from "./compositions/AdVideo";
+import { AdVideoT2 } from "./compositions/AdVideoT2";
 import { ParticleBottle, PARTICLE_BOTTLE_DURATION } from "./compositions/ParticleBottle";
 import { GlitterEffect, GLITTER_DURATION } from "./compositions/GlitterEffect";
 import { LensFlareEffect, LENS_FLARE_DURATION } from "./compositions/LensFlareEffect";
@@ -18,7 +19,15 @@ export const RemotionRoot: React.FC = () => {
       <Composition
         id="AdVideo"
         component={AdVideo}
-        durationInFrames={765}
+        durationInFrames={561}
+        fps={30}
+        width={1080}
+        height={1920}
+      />
+      <Composition
+        id="AdVideoT2"
+        component={AdVideoT2}
+        durationInFrames={561}
         fps={30}
         width={1080}
         height={1920}

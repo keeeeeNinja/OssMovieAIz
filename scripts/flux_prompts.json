@@ -1,12 +1,82 @@
 [
-  {"id": "S01", "prompt": "A close-up portrait of a young Japanese woman in her late 20s with a round soft face, slightly childish features, and healthy skin tone, looking into a bathroom mirror with a slightly troubled expression, bare face with no makeup, soft natural lighting from the side, shallow depth of field focused on her eyes, vertical composition, photorealistic"},
-  {"id": "S02", "prompt": "A young Japanese woman in her late 20s with a round soft face and healthy skin tone, leaning close to a bathroom mirror in morning light, peering at her own reflection with a resigned expression, wearing a simple pajama top, warm natural window light, bathroom interior background, vertical composition, photorealistic"},
-  {"id": "S03", "prompt": "A young Japanese woman in her late 20s with a round soft face and healthy skin tone, wearing a white medical face mask, only her eyes visible above the mask, standing in a bright indoor setting, her eyes look plain and unremarkable without makeup, soft even lighting, upper body shot, vertical composition, photorealistic"},
-  {"id": "S04", "prompt": "A young Japanese woman in her late 20s with a round soft face and healthy skin tone, holding a smartphone at arm's length taking a selfie, slightly disappointed expression, casual clothes, bright cafe interior background, natural lighting, medium shot from slightly above, vertical composition, photorealistic"},
-  {"id": "S05", "prompt": "Two young Japanese women standing side by side, the left woman has a round soft face with small plain eyes and healthy skin tone looking slightly self-conscious, the right woman has striking large defined eyes with long lashes looking confident, both in casual outfits, bright natural lighting, medium shot, vertical composition, photorealistic"},
-  {"id": "S06", "prompt": "Overhead close-up of a young Japanese woman's hands applying eye makeup with a thin brush near her eye, various cosmetic products scattered on a white vanity table, eyeshadow palette and mascara visible, soft warm lighting from above, shallow depth of field, vertical composition, photorealistic"},
-  {"id": "S07", "prompt": "Flat lay overhead shot of eyelash care products neatly arranged on a clean white marble surface, including an eyelash curler, lash serum bottle, mascara, cotton pads, and a small mirror, soft diffused lighting, aesthetic product photography style, vertical composition, photorealistic"},
-  {"id": "S08", "prompt": "Extreme close-up of a young Japanese woman's eye area after full eye makeup, beautifully curled long lashes, subtle eyeshadow gradient, defined eye line, her eye appears larger and more expressive than before, studio-quality ring light reflection visible in the iris, shallow depth of field, vertical composition, photorealistic"},
-  {"id": "S09", "prompt": "A young Japanese woman in her late 20s with a round soft face and healthy skin tone, after complete eye makeup transformation, looking confident and radiant, soft smile, her eyes appear defined and striking with curled lashes and subtle eyeshadow, warm golden hour lighting, upper body portrait, slightly blurred background, vertical composition, photorealistic"},
-  {"id": "S10", "prompt": "A young Japanese woman in her late 20s with a round soft face and healthy skin tone, bright genuine smile looking directly at camera, beautifully made-up eyes with defined lashes, casual stylish outfit, clean bright background, warm friendly atmosphere, upper body portrait, soft natural lighting, vertical composition, photorealistic"}
+  {
+    "id": "T1_C01",
+    "prompt": "ohwx woman, sitting on couch looking exhausted and stressed, tired expression, oversized grey hoodie, messy living room with dim warm lamp light, medium shot, moody atmosphere, photorealistic, 8K, ultra sharp, commercial photography"
+  },
+  {
+    "id": "T1_C02",
+    "prompt": "ohwx woman, tilting head with questioning look, raised eyebrow, casual black t-shirt, clean white minimal background, soft even studio lighting, medium close-up shot, photorealistic, 8K, ultra sharp, commercial photography"
+  },
+  {
+    "id": "T1_C03",
+    "prompt": "ohwx woman, lying in bed scrolling smartphone in dark room, blue screen light illuminating face, sleepy expression, pajamas, bedroom at night, close-up shot from above, cinematic blue tones, photorealistic, 8K, ultra sharp"
+  },
+  {
+    "id": "T1_C04",
+    "prompt": "ohwx woman, sitting at empty dining table with chin resting on hand, bored expression, white blouse, modern kitchen with morning sunlight through window, empty plate on table, medium shot, soft natural lighting, photorealistic, 8K, ultra sharp"
+  },
+  {
+    "id": "T1_C05",
+    "prompt": "ohwx woman, sitting at office desk looking dehydrated, dry lips slightly parted, business casual outfit, empty water bottle on desk, fluorescent office lighting, medium shot, slightly desaturated tones, photorealistic, 8K, ultra sharp"
+  },
+  {
+    "id": "T1_C06",
+    "prompt": "ohwx woman, looking directly at camera with confident slight smile, arms crossed, clean white top, bright gradient background transitioning from grey to white, centered composition, even studio lighting, medium shot, photorealistic, 8K, ultra sharp"
+  },
+  {
+    "id": "T1_C07",
+    "prompt": "ohwx woman, sitting up in bed stretching arms above head, refreshed joyful smile, light pink satin pajamas, bright airy bedroom with white curtains and golden morning light, medium shot, face clearly visible, warm soft lighting, photorealistic, 8K, ultra sharp"
+  },
+  {
+    "id": "T1_C08",
+    "prompt": "ohwx woman, touching her own cheek gently admiring skin, glowing healthy skin, natural makeup, cream knit sweater, clean bathroom with mirror reflection, soft ring light, close-up shot, warm tones, photorealistic, 8K, ultra sharp"
+  },
+  {
+    "id": "T1_C09",
+    "prompt": "ohwx woman, focused working on laptop with determined expression, glasses on, neat button-up shirt, modern minimalist desk with plant and coffee, bright natural window light from side, medium shot, clean crisp tones, photorealistic, 8K, ultra sharp"
+  },
+  {
+    "id": "T1_C10",
+    "prompt": "ohwx woman, giving thumbs up with warm encouraging smile, casual denim jacket, soft pastel pink background, bright cheerful studio lighting, medium close-up shot, vibrant positive mood, photorealistic, 8K, ultra sharp, commercial photography"
+  },
+  {
+    "id": "T2_C01",
+    "prompt": "ohwx woman, sitting alone on park bench looking at old photographs, nostalgic gentle expression, beige trench coat, autumn park with golden fallen leaves and soft sunset, medium wide shot, warm golden hour lighting, photorealistic, 8K, ultra sharp, cinematic"
+  },
+  {
+    "id": "T2_C02",
+    "prompt": "ohwx woman, writing in journal at vintage wooden desk, thoughtful downward gaze, soft cream cardigan, cozy room with warm lamp and bookshelf background, close-up shot, warm amber tones, photorealistic, 8K, ultra sharp, cinematic"
+  },
+  {
+    "id": "T2_C03",
+    "prompt": "ohwx woman, standing alone in crowded school hallway looking anxious, hugging books to chest, school uniform navy blazer, blurred students walking past, shallow depth of field, medium shot, cool fluorescent lighting with slight grain, photorealistic, 8K, ultra sharp"
+  },
+  {
+    "id": "T2_C04",
+    "prompt": "ohwx woman, sitting on train platform bench with head down, sad exhausted expression, dark navy coat and scarf, empty train station at dusk with overhead lights, wide shot, melancholic blue-purple twilight tones, photorealistic, 8K, ultra sharp, cinematic"
+  },
+  {
+    "id": "T2_C05",
+    "prompt": "ohwx woman, looking at her own reflection in rainy window, contemplative expression, grey oversized sweater, rain drops on glass with city lights bokeh behind, close-up shot, moody cool blue tones, photorealistic, 8K, ultra sharp"
+  },
+  {
+    "id": "T2_C06",
+    "prompt": "ohwx woman, slowly looking up from darkness into light, hopeful emerging expression, white linen shirt, dramatic split lighting half shadow half warm light, medium close-up shot, transitional lighting from cool to warm, photorealistic, 8K, ultra sharp, cinematic"
+  },
+  {
+    "id": "T2_C07",
+    "prompt": "ohwx woman, painting on canvas in bright art studio, joyful focused smile, paint-stained apron over striped shirt, colorful art studio with large windows and natural light, medium wide shot, vibrant warm natural lighting, photorealistic, 8K, ultra sharp"
+  },
+  {
+    "id": "T2_C08",
+    "prompt": "ohwx woman, sitting in cafe holding warm coffee cup with both hands, peaceful serene smile with closed eyes, olive green knit sweater, cozy cafe with warm wood interior and soft bokeh lights, close-up shot, warm honey tones, photorealistic, 8K, ultra sharp"
+  },
+  {
+    "id": "T2_C09",
+    "prompt": "ohwx woman, smiling joyfully in flower field, arms gently outstretched, carefree happy expression, flowy white summer dress, colorful wildflowers surrounding her, golden sunset light, close-up shot, face clearly visible, warm golden tones, photorealistic, 8K, ultra sharp, highly detailed"
+  },
+  {
+    "id": "T2_C10",
+    "prompt": "ohwx woman, looking at camera with gentle warm smile and slight head tilt, soft natural makeup, light lavender blouse, soft dreamy bokeh background with warm light flares, medium close-up shot, ethereal warm glow, photorealistic, 8K, ultra sharp, cinematic"
+  }
 ]

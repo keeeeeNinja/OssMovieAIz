@@ -36,11 +36,12 @@ import time
 SSH_KEY = os.path.expanduser("~/.ssh/id_ed25519")
 RUNPOD_API_URL = "https://api.runpod.io/graphql"
 COMFYUI_OUTPUT_DIR = "/workspace/ComfyUI/output"
-LOCAL_OUTPUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../作業中動画")
+DEFAULT_OUTPUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../作業中動画")
+LOCAL_OUTPUT_DIR = DEFAULT_OUTPUT_DIR  # --output-dir で上書き可能
 WORKFLOW_TEMPLATE = os.path.join(os.path.dirname(os.path.abspath(__file__)),
     "../.claude/skills/wan-video/workflow_template.json")
 
-LOCK_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../作業中動画/.locks")
+LOCK_DIR = os.path.join(DEFAULT_OUTPUT_DIR, ".locks")  # --output-dir で連動
 NEGATIVE_PROMPT = "blurry, distorted, low quality, shaky, deformed hands, extra fingers, watermark, text overlay"
 
 
@@ -285,7 +286,15 @@ def main():
     parser.add_argument("--pod-id", default="", help="RunPod Pod ID（指定すると完了後にPod停止を提案）")
     parser.add_argument("--terminate", action="store_true", help="Pod停止時にterminateを使う（Volumeなし用）")
     parser.add_argument("--clean-locks", action="store_true", help="開始前にロックファイルを全削除する")
+    parser.add_argument("--output-dir", default="", help="入出力ディレクトリ（デフォルト: 作業中動画/）")
     args = parser.parse_args()
+
+    # 出力先ディレクトリの上書き
+    global LOCAL_OUTPUT_DIR, LOCK_DIR
+    if args.output_dir:
+        LOCAL_OUTPUT_DIR = args.output_dir
+        LOCK_DIR = os.path.join(args.output_dir, ".locks")
+        os.makedirs(LOCAL_OUTPUT_DIR, exist_ok=True)
 
     # フィルタ
     scene_filter = set(args.scenes.split(",")) if args.scenes else None
