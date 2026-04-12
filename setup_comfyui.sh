@@ -110,12 +110,12 @@ echo '[4/8] SageAttention done'
 # --- 5. Wan 2.1 I2V Models (parallel download) ---
 echo '[5/8] Downloading Wan 2.1 I2V models...'
 
-mkdir -p /workspace/ComfyUI/models/diffusion_models
+mkdir -p /workspace/ComfyUI/models/unet
 mkdir -p /workspace/ComfyUI/models/text_encoders
 mkdir -p /workspace/ComfyUI/models/clip_vision
 mkdir -p /workspace/ComfyUI/models/vae
 
-cd /workspace/ComfyUI/models/diffusion_models
+cd /workspace/ComfyUI/models/unet
 [ ! -f "wan2.1-i2v-14b-480p-Q5_K_M.gguf" ] && \
   wget -q https://huggingface.co/city96/Wan2.1-I2V-14B-480P-gguf/resolve/main/wan2.1-i2v-14b-480p-Q5_K_M.gguf &
 PID_W1=$!
@@ -138,7 +138,68 @@ PID_W4=$!
 # Wait for all downloads
 echo 'Waiting for all downloads to complete...'
 wait $PID_W1 $PID_W2 $PID_W3 $PID_W4
-echo '[5/8] All models downloaded'
+echo '[5/8] All Wan models downloaded'
+
+# --- 5b. Flux.1-dev Models (fp8, parallel download) ---
+echo '[5b/8] Downloading Flux.1-dev fp8 models...'
+
+mkdir -p /workspace/ComfyUI/models/unet
+mkdir -p /workspace/ComfyUI/models/clip
+mkdir -p /workspace/ComfyUI/models/loras
+
+# Helper: download with optional HF_TOKEN auth (needed for gated BFL repo)
+hf_wget() {
+  local url=$1
+  local dest=$2
+  if [ -n "$HF_TOKEN" ]; then
+    wget -q --header="Authorization: Bearer $HF_TOKEN" -O "$dest" "$url"
+  else
+    wget -q -O "$dest" "$url"
+  fi
+}
+export -f hf_wget
+
+cd /workspace/ComfyUI/models/unet
+# Comfy-Org repackaged fp8 (public), rename to flux1-dev.safetensors to match generate_flux_images.py
+[ ! -f "flux1-dev.safetensors" ] && \
+  hf_wget "https://huggingface.co/Comfy-Org/flux1-dev/resolve/main/flux1-dev-fp8.safetensors" "flux1-dev.safetensors" &
+PID_F1=$!
+
+cd /workspace/ComfyUI/models/clip
+[ ! -f "t5xxl_fp8_e4m3fn.safetensors" ] && \
+  hf_wget "https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/main/t5xxl_fp8_e4m3fn.safetensors" "t5xxl_fp8_e4m3fn.safetensors" &
+PID_F2=$!
+
+[ ! -f "clip_l.safetensors" ] && \
+  hf_wget "https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/main/clip_l.safetensors" "clip_l.safetensors" &
+PID_F3=$!
+
+cd /workspace/ComfyUI/models/vae
+# ae.safetensors is gated (BFL), requires HF_TOKEN
+[ ! -f "ae.safetensors" ] && \
+  hf_wget "https://huggingface.co/black-forest-labs/FLUX.1-dev/resolve/main/ae.safetensors" "ae.safetensors" &
+PID_F4=$!
+
+wait $PID_F1 $PID_F2 $PID_F3 $PID_F4
+echo '[5b/8] Flux fp8 models downloaded'
+
+# --- 5c. Flux LoRAs from GitHub Releases (public repo) ---
+echo '[5c/8] Downloading Flux LoRAs from GitHub Releases...'
+cd /workspace/ComfyUI/models/loras
+
+LORA_BASE="https://github.com/keeeeeNinja/OssMovieAIz-loras/releases/download"
+for lora in \
+  "v1/ayano_chan_flux_lora-step00001800.safetensors" \
+  "v1/URDP001_v2.safetensors" \
+  "v1/flux_japanese_girl_v2.safetensors" \
+  "v1/sawayaka_men_v1.safetensors" \
+  "rin_chan_v1/rin_chan_v1.safetensors"
+do
+  fname=$(basename "$lora")
+  [ ! -f "$fname" ] && wget -q -L "${LORA_BASE}/${lora}" &
+done
+wait
+echo '[5c/8] LoRAs downloaded'
 
 # --- 6. ffmpeg確認（MP4出力に必要） ---
 echo '[6/8] Checking ffmpeg...'
@@ -151,14 +212,18 @@ fi
 
 # --- 7. Verify ---
 echo '[7/8] Verifying files...'
-echo '--- Diffusion Models ---'
-ls -lh /workspace/ComfyUI/models/diffusion_models/*.gguf
-echo '--- Text Encoders ---'
-ls -lh /workspace/ComfyUI/models/text_encoders/*.safetensors
+echo '--- UNet (Wan GGUF + Flux) ---'
+ls -lh /workspace/ComfyUI/models/unet/*.gguf /workspace/ComfyUI/models/unet/*.safetensors 2>/dev/null
+echo '--- Text Encoders (Wan) ---'
+ls -lh /workspace/ComfyUI/models/text_encoders/*.safetensors 2>/dev/null
 echo '--- VAE ---'
-ls -lh /workspace/ComfyUI/models/vae/*.safetensors
-echo '--- CLIP Vision ---'
-ls -lh /workspace/ComfyUI/models/clip_vision/*.safetensors
+ls -lh /workspace/ComfyUI/models/vae/*.safetensors 2>/dev/null
+echo '--- CLIP Vision (Wan) ---'
+ls -lh /workspace/ComfyUI/models/clip_vision/*.safetensors 2>/dev/null
+echo '--- CLIP (Flux) ---'
+ls -lh /workspace/ComfyUI/models/clip/*.safetensors 2>/dev/null
+echo '--- LoRAs ---'
+ls -lh /workspace/ComfyUI/models/loras/*.safetensors 2>/dev/null
 echo '--- Custom Nodes ---'
 ls -d /workspace/ComfyUI/custom_nodes/ComfyUI-Manager \
       /workspace/ComfyUI/custom_nodes/ComfyUI-GGUF \
