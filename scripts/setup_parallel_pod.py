@@ -130,7 +130,7 @@ DOCKER_IMAGES = {
 def _try_create_pod(api_key, name, gpu_type, region, disk_gb):
     """単発でPod作成を試す。成功時はpod_id、失敗時はNoneを返す"""
     datacenter = f', dataCenterId: "{region}"' if region else ""
-    # HF_TOKEN は RunPod Secret から参照（setup_comfyui.sh の Flux gated model DL で使用）
+    # HF_TOKEN は RunPod Secret から参照（将来のモデルDL用に設定）
     env_block = 'env: [{ key: "HF_TOKEN", value: "{{ RUNPOD_SECRET_HF_TOKEN }}" }],'
     mutation = f'''mutation {{
         podFindAndDeployOnDemand(input: {{
@@ -350,10 +350,10 @@ def main():
     parser.add_argument("--flux-prompts", default="",
                         help="[廃止] Flux生成はPod1専用。指定するとエラーになります")
     parser.add_argument("--generate", action="store_true",
-                        help="セットアップ（+Flux）後にWan生成も実行する")
+                        help="セットアップ後にWan生成も実行する")
     parser.add_argument("--image-dir", default="", help="[旧互換] ローカルに既存の参照画像を置くディレクトリ")
     parser.add_argument("--output-dir", default="",
-                        help="Flux画像の保存先ディレクトリ（単一テーマ用）")
+                        help="Wan出力の保存先ディレクトリ（単一テーマ用）")
     parser.add_argument("--output-root", default="",
                         help="並列プールモードのルートディレクトリ（例: 作業中動画）。指定するとシーンIDのT{N}_から theme{N}/ へ自動ルーティング。--output-dir と排他")
     args = parser.parse_args()
@@ -385,7 +385,7 @@ def main():
 
     api_key = get_api_key()
 
-    # Wan プロンプトJSON読み込み（Flux のみでもWanを後で回すためロードは常に行う）
+    # Wan プロンプトJSON読み込み
     with open(wan_prompts_path) as f:
         prompts = json.load(f)
 

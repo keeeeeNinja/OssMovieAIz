@@ -94,7 +94,7 @@ fuser -k 8188/tcp 2>/dev/null || true
 sleep 1
 echo '  Port 8188 cleared'
 
-# --- 3. ComfyUI ---
+# --- 3. ComfyUI install ---
 cd /workspace
 if [ ! -d "ComfyUI" ]; then
   git clone https://github.com/comfyanonymous/ComfyUI.git
@@ -112,7 +112,7 @@ if $BLACKWELL; then
 fi
 echo '[3/8] ComfyUI installed (latest)'
 
-# --- 3. Custom Nodes ---
+# --- 4. Custom Nodes ---
 cd /workspace/ComfyUI/custom_nodes
 
 # ComfyUI-Manager
@@ -135,8 +135,8 @@ cd /workspace/ComfyUI/custom_nodes/ComfyUI-VideoHelperSuite && pip install -q -r
 
 echo '[4/8] Custom nodes installed (Manager, GGUF, KJNodes, VideoHelperSuite)'
 
-# --- 4. SageAttention (pip) ---
-echo '[5/9] Installing SageAttention...'
+# --- 5. SageAttention ---
+echo '[5/8] Installing SageAttention...'
 if $BLACKWELL; then
   # 5090: ソースからビルド（Blackwell対応にはnightly PyTorch + ソースビルドが必要）
   echo '  [5090] Building SageAttention from source for Blackwell...'
@@ -157,10 +157,10 @@ else
     pip install -q -e . 2>/dev/null || echo '  WARNING: SageAttention install failed. Will run without it.'
   }
 fi
-echo '[4/8] SageAttention done'
+echo '[5/8] SageAttention done'
 
-# --- 5. Wan 2.1 I2V Models (parallel download) ---
-echo '[5/8] Downloading Wan 2.1 I2V models...'
+# --- 6. Wan 2.1 I2V Models (parallel download) ---
+echo '[6/8] Downloading Wan 2.1 I2V models...'
 
 mkdir -p /workspace/ComfyUI/models/unet
 mkdir -p /workspace/ComfyUI/models/text_encoders
@@ -190,11 +190,11 @@ PID_W4=$!
 # Wait for all downloads
 echo 'Waiting for all downloads to complete...'
 wait $PID_W1 $PID_W2 $PID_W3 $PID_W4
-echo '[5/8] All Wan models downloaded'
+echo '[6a/8] Wan models downloaded'
 
-# --- 5b. Flux.1-dev Models (fp8, parallel download) ---
+# --- 6b. Flux.1-dev Models (fp8, parallel download) ---
 if ! $WAN_ONLY; then
-echo '[5b/8] Downloading Flux.1-dev fp8 models...'
+echo '[6b/8] Downloading Flux.1-dev fp8 models...'
 
 mkdir -p /workspace/ComfyUI/models/unet
 mkdir -p /workspace/ComfyUI/models/clip
@@ -234,10 +234,10 @@ cd /workspace/ComfyUI/models/vae
 PID_F4=$!
 
 wait $PID_F1 $PID_F2 $PID_F3 $PID_F4
-echo '[5b/8] Flux fp8 models downloaded'
+echo '[6b/8] Flux fp8 models downloaded'
 
-# --- 5c. Flux LoRAs from GitHub Releases (public repo) ---
-echo '[5c/8] Downloading Flux LoRAs from GitHub Releases...'
+# --- 6c. Flux LoRAs from GitHub Releases (public repo) ---
+echo '[6c/8] Downloading Flux LoRAs from GitHub Releases...'
 cd /workspace/ComfyUI/models/loras
 
 LORA_BASE="https://github.com/keeeeeNinja/OssMovieAIz-loras/releases/download"
@@ -252,15 +252,15 @@ do
   [ ! -f "$fname" ] && wget -q -L "${LORA_BASE}/${lora}" &
 done
 wait
-echo '[5c/8] LoRAs downloaded'
+echo '[6c/8] LoRAs downloaded'
 
 else
-echo '[5b/8] [WAN-ONLY] Flux models skipped'
-echo '[5c/8] [WAN-ONLY] LoRAs skipped'
+echo '[6b/8] [WAN-ONLY] Flux models skipped'
+echo '[6c/8] [WAN-ONLY] LoRAs skipped'
 fi
 
-# --- 6. ffmpeg確認（MP4出力に必要） ---
-echo '[6/8] Checking ffmpeg...'
+# --- 7. ffmpeg確認（MP4出力に必要） ---
+echo '[7/8] Checking ffmpeg...'
 if ! command -v ffmpeg &> /dev/null; then
   apt-get update -qq && apt-get install -y -qq ffmpeg > /dev/null 2>&1
   echo '  ffmpeg installed'
@@ -268,20 +268,24 @@ else
   echo '  ffmpeg already available'
 fi
 
-# --- 7. Verify ---
-echo '[7/8] Verifying files...'
-echo '--- UNet (Wan GGUF + Flux) ---'
-ls -lh /workspace/ComfyUI/models/unet/*.gguf /workspace/ComfyUI/models/unet/*.safetensors 2>/dev/null
+# --- 8. Verify + Start ---
+echo '[8/8] Verifying files + starting ComfyUI...'
+echo '--- UNet (Wan GGUF) ---'
+ls -lh /workspace/ComfyUI/models/unet/*.gguf 2>/dev/null
 echo '--- Text Encoders (Wan) ---'
 ls -lh /workspace/ComfyUI/models/text_encoders/*.safetensors 2>/dev/null
 echo '--- VAE ---'
 ls -lh /workspace/ComfyUI/models/vae/*.safetensors 2>/dev/null
 echo '--- CLIP Vision (Wan) ---'
 ls -lh /workspace/ComfyUI/models/clip_vision/*.safetensors 2>/dev/null
+if ! $WAN_ONLY; then
+echo '--- UNet (Flux) ---'
+ls -lh /workspace/ComfyUI/models/unet/*.safetensors 2>/dev/null
 echo '--- CLIP (Flux) ---'
 ls -lh /workspace/ComfyUI/models/clip/*.safetensors 2>/dev/null
 echo '--- LoRAs ---'
 ls -lh /workspace/ComfyUI/models/loras/*.safetensors 2>/dev/null
+fi
 echo '--- Custom Nodes ---'
 ls -d /workspace/ComfyUI/custom_nodes/ComfyUI-Manager \
       /workspace/ComfyUI/custom_nodes/ComfyUI-GGUF \
@@ -292,14 +296,14 @@ python3 -c "import sageattention; print('  SageAttention:', sageattention.__vers
 nvidia-smi | head -4
 python3 -c "import torch; print('CUDA:', torch.cuda.is_available())"
 
-# --- 8. Start ComfyUI ---
+# --- Start ComfyUI ---
 cd /workspace/ComfyUI
 SAGE_FLAG=""
 if python3 -c "import sageattention" 2>/dev/null; then
   SAGE_FLAG="--use-sage-attention"
 fi
 python3 main.py --listen 0.0.0.0 --port 8188 $SAGE_FLAG > /workspace/comfyui.log 2>&1 &
-echo "[8/8] ComfyUI starting on port 8188 ${SAGE_FLAG:+(SageAttention ON)}..."
+echo "ComfyUI starting on port 8188 ${SAGE_FLAG:+(SageAttention ON)}..."
 sleep 25
 HTTP_CODE=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8188/)
 if [ "$HTTP_CODE" = "200" ]; then
