@@ -230,7 +230,7 @@ blur, distort, low quality, shaky
 
 ---
 
-### Step 7: fal.aiで動画生成を実行する
+### Step 8: fal.aiで動画生成を実行する
 
 `mcp__fal-ai__generate_video_from_image` でシーンごとに生成する。
 
@@ -246,7 +246,7 @@ blur, distort, low quality, shaky
 
 ---
 
-### Step 8: 生成動画を作業中動画フォルダに保存する
+### Step 9: 生成動画を作業中動画フォルダに保存する
 
 生成されたURLをBash（curl）でダウンロードする。
 

@@ -19,15 +19,15 @@ allowed-tools: Bash(ffmpeg *), Bash(ffprobe *), Bash(ls *), Bash(python3 *), Bas
 
 ### Step 1: 動画ファイルと合計尺を確認する
 
-!`ls "/Users/keeee/Desktop/Dev/OssMovieAIz/作業中動画/"*.mp4 2>/dev/null`
+!`ls /Users/keeee/Desktop/Dev/OssMovieAIz/作業中動画/*.mp4 /Users/keeee/Desktop/Dev/OssMovieAIz/作業中動画/theme*/*.mp4 2>/dev/null`
 
-ファイルが0本なら「作業中動画フォルダに動画ファイルが見つかりませんでした」と伝えて終了する。
+画像ファイルは `作業中動画/` 直下、または `作業中動画/theme*/` 内にある。ファイルが0本なら「作業中動画フォルダに動画ファイルが見つかりませんでした」と伝えて終了する。
 
 合計尺を計測する:
 
 !`python3 -c "
 import subprocess, glob
-files = sorted(glob.glob('/Users/keeee/Desktop/Dev/OssMovieAIz/作業中動画/*.mp4'))
+files = sorted(glob.glob('/Users/keeee/Desktop/Dev/OssMovieAIz/作業中動画/*.mp4') + glob.glob('/Users/keeee/Desktop/Dev/OssMovieAIz/作業中動画/theme*/*.mp4'))
 total = 0
 for f in files:
     r = subprocess.run(['ffprobe','-v','quiet','-show_entries','format=duration','-of','csv=p=0',f], capture_output=True, text=True)

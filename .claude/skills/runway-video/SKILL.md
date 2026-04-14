@@ -249,7 +249,7 @@ mcp__fal-ai__upload_file({ file_path: "/Users/keeee/Desktop/Dev/OssMovieAIz/作�
 
 ---
 
-### Step 8: 生成動画を作業中動画フォルダに保存する
+### Step 9: 生成動画を作業中動画フォルダに保存する
 
 生成されたURLをBash（curl）でダウンロードする。
 

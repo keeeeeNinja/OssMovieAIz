@@ -30,8 +30,8 @@ allowed-tools: Agent, Bash, Read, Write
 
 ### Step 0: RunPod接続情報を確認する
 
-1. `pod起動コマンド.md` を読んでPodの起動方法を確認する
-2. ユーザーに「RunPodのPodは起動していますか？ SSH接続先（IP・ポート）を教えてください」と聞く
+1. `ssh.md` を読んでSSH接続情報を確認する（`/runpod-start` スキルが起動時に更新する）
+2. SSH情報がなければユーザーに「RunPodのPodは起動していますか？ SSH接続先（IP・ポート）を教えてください」と聞く
 3. 接続情報を受け取ったらStep 8-1のPod受け入れフローでSSH疎通・ComfyUI起動を確認する
 
 **この時点では1台目のPodのみ。** 2台目以降はStep 8でユーザーから追加される。

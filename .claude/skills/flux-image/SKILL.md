@@ -235,20 +235,9 @@ python3 scripts/generate_flux_images.py \
     --copy-to-input
   ```
 
-- **並列Pod（Volume なし）**: `setup_parallel_pod.py --output-root` で end-to-end。`--scenes` は省略（全シーン対象）
+- **並列Pod（Volume なし）はWan専用**。Flux画像生成はPod 1（Network Volume付き）のみで実行する。並列PodにはFlux/LoRAはインストールされない。Pod 1で全シーンのFlux画像を生成し、ローカル経由でWan専用Podに共有する
 
-  ```bash
-  python3 scripts/setup_parallel_pod.py \
-    --flux-prompts scripts/flux_prompts.json \
-    --wan-prompts scripts/wan_i2v_prompts.json \
-    --lora flux_japanese_girl_v2.safetensors \
-    --output-root 作業中動画 \
-    --generate
-  ```
-
-  `--generate` で Flux → Wan 一気通貫。Wan の per-scene ループは Flux 画像がローカルに現れるまで最大10分待機するので、他Podが当該シーンの Flux をまだ生成中でも問題なく同期する。
-
-- **生成結果は**各Podがローカルの `作業中動画/theme{N}/flux_*.png` に自動振り分けでダウンロードする。全Podの完了後にStep 5-3（クオリティゲート）に進む
+- **生成結果は** Pod 1 がローカルの `作業中動画/theme{N}/flux_*.png` に自動振り分けでダウンロードする。全シーン完了後にStep 5-3（クオリティゲート）に進む
 
 #### 5-3. 生成結果を確認する（クオリティゲート）
 
