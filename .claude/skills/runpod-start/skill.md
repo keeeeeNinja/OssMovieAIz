@@ -19,24 +19,46 @@ RunPod GraphQL APIを使ってPodを作成し、ComfyUIが使える状態にす�
 
 ### 実行手順
 
-#### Step 1: Pod作成
+#### Step 1: Pod作成（4090優先 / 在庫切れなら3090フォールバック）
+
+まず **RTX 4090** で作成を試す:
 
 ```bash
 source ~/.zshrc && curl -s -H "Authorization: Bearer $RUNPOD_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
-    "query": "mutation { podFindAndDeployOnDemand(input: { name: \"ComfyUI-4090\", gpuTypeId: \"NVIDIA GeForce RTX 4090\", gpuCount: 1, volumeInGb: 0, containerDiskInGb: 20, networkVolumeId: \"c1dbeweh5j\", volumeMountPath: \"/workspace\", imageName: \"runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04\", startSsh: true, ports: \"22/tcp,8188/http\", dataCenterId: \"EU-RO-1\", env: [{ key: \"HF_TOKEN\", value: \"{{ RUNPOD_SECRET_HF_TOKEN }}\" }] }) { id name desiredStatus } }"
+    "query": "mutation { podFindAndDeployOnDemand(input: { name: \"ComfyUI-4090\", gpuTypeId: \"NVIDIA GeForce RTX 4090\", gpuCount: 1, volumeInGb: 0, containerDiskInGb: 80, networkVolumeId: \"c1dbeweh5j\", volumeMountPath: \"/workspace\", imageName: \"runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04\", startSsh: true, ports: \"22/tcp,8188/http\", dataCenterId: \"EU-RO-1\", env: [{ key: \"HF_TOKEN\", value: \"{{ RUNPOD_SECRET_HF_TOKEN }}\" }] }) { id name desiredStatus } }"
+  }' https://api.runpod.io/graphql
+```
+
+**GPU フォールバック戦略:**
+
+1. **RTX 4090** で作成を試す
+2. 在庫切れ（`podFindAndDeployOnDemand` が null）なら **30秒間隔で最大10分リトライ**
+3. 10分待っても確保できなければ **RTX 3090** にフォールバック（Pod名も `ComfyUI-3090` に変更）
+4. **RTX 5090 は使わない**（Blackwell世代はPyTorch 2.6+/CUDA 12.6+が必要で、現在のComfyUI環境と互換性がない）
+5. 3090 も取れなければユーザーに報告して停止
+
+> Why: 5090はComfyUI標準環境（PyTorch 2.4 + CUDA 12.4）で「CUDA error: no kernel image is available」エラーが出て使えない。3090は4090比1.5倍遅い（Wan I2V 1クリップ6分→10分）が、追加セットアップなしで確実に動く。
+
+**3090 フォールバック時のmutation:**
+
+```bash
+source ~/.zshrc && curl -s -H "Authorization: Bearer $RUNPOD_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "mutation { podFindAndDeployOnDemand(input: { name: \"ComfyUI-3090\", gpuTypeId: \"NVIDIA GeForce RTX 3090\", gpuCount: 1, volumeInGb: 0, containerDiskInGb: 80, networkVolumeId: \"c1dbeweh5j\", volumeMountPath: \"/workspace\", imageName: \"runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04\", startSsh: true, ports: \"22/tcp,8188/http\", dataCenterId: \"EU-RO-1\", env: [{ key: \"HF_TOKEN\", value: \"{{ RUNPOD_SECRET_HF_TOKEN }}\" }] }) { id name desiredStatus } }"
   }' https://api.runpod.io/graphql
 ```
 
 **デフォルト設定:**
-- GPU: RTX 4090
+- GPU: RTX 4090（10分在庫切れなら RTX 3090 にフォールバック）
 - リージョン: EU-RO-1
 - Network Volume: `c1dbeweh5j`（100GB、/workspace マウント）
 - ポート: 22/tcp（SSH）、8188/http（ComfyUI）
 - 環境変数: HF_TOKEN（RunPodシークレット参照）
 
-ユーザーが別のGPUやリージョンを指定した場合はパラメータを変更する。
+ユーザーが別のGPUやリージョンを明示指定した場合は、フォールバックせずその設定のままで作成する。
 
 #### Step 2: 起動待ち＋SSH接続情報取得
 
@@ -117,3 +139,4 @@ ssh root@<IP> -p <PORT> -i ~/.ssh/id_ed25519
 | `invalid mount config` | volumeMountPath未指定 | `/workspace` を指定 |
 | HF_TOKEN が空 | SSHセッションに環境変数が渡らない | `/proc/1/environ` から読み込む（Step 4） |
 | EU-RO-1にGPUがない | 在庫切れ | `dataCenterId` を削除してAny regionにする |
+| 4090も3090も取れない | 全リージョン在庫切れ | ユーザーに報告して停止。5090は使わない（ComfyUI互換性問題） |

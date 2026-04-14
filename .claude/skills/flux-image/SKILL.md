@@ -117,6 +117,42 @@ LoRAを使用する場合、以下の手順でトリガーワードを特定す�
 
 ---
 
+#### 3-3. I2V前提のプロンプト設計ガイドライン（必須）
+
+**この静止画はWan 2.1 I2Vで動かす「動画の最初のフレーム」である。** 単体で完成した写真ではない。以下の4点を必ず守ること。
+
+1. **ポーズ設計 — 動きの余白を残す**
+   - I2Vが自然に動かせる静的ポーズを選ぶ
+   - 動詞の途中動作は避ける:
+     - ✗ `applying serum` / `walking` / `leaning in` / `raising hand`
+     - ✓ `holding serum wand close to upper lashes` / `standing on sidewalk with head slightly lowered` / `sitting beside her friend` / `hand resting on table`
+   - 腕を大きく広げたり極端なポーズ、ジャンプ、複雑な相互作用は避ける
+   - 「今にも動き出しそう」な自然な静止姿勢にする
+
+2. **構図設計 — カメラワークの余白を確保する**
+   - 顔・被写体がフレームギリギリにならないよう、少し引きの構図にする
+   - `extreme close-up` は I2V で寄る余地がないので、push-in が入る場合は `medium close-up` 程度に留める
+   - 頭上・左右に一定の余白を残し、push-in / pan / tilt のどれが入っても破綻しないようにする
+
+3. **表情設計 — 控えめに、I2Vで感情を足す前提**
+   - 大げさな表情タグは使わない:
+     - ✗ `amazed surprised expression` / `troubled melancholic` / `bright radiant smile` / `defeated exhausted`
+     - ✓ `quiet subtle expression` / `soft gentle smile` / `calm neutral face` / `slightly tired look`
+   - I2Vで表情の推移（目を開く・微笑み始める等）を後付けするため、1フレーム目はニュートラル寄りにする
+
+4. **シーン間のつながり — 前後カットと整合させる**
+   - 直前・直後のシーンと人物の向き・服装・ロケーション・ライティングを矛盾させない
+   - 同一人物のカットが続く場合、視線の向き・体の向きが180度反転しないよう配慮する（180度ルール）
+   - 服装は1動画内で原則同じ（シーン間に時間経過を示したいときのみ変更し、プロンプト.mdに明記）
+
+**自己チェック（プロンプト作成後に必ず確認）:**
+- [ ] 動詞 `-ing` で進行中の動作を書いていないか
+- [ ] `extreme close-up` でpush-inの余地を潰していないか
+- [ ] 表情が強すぎないか（Fluxが固まった瞬間を出力してもI2Vで感情を足せる範囲か）
+- [ ] 前後シーンと服装・ロケーション・ライティングが連続しているか
+
+---
+
 ### Step 4: flux_prompts.jsonに保存する
 
 以下の形式で保存する：
@@ -137,37 +173,82 @@ LoRAを使用する場合、以下の手順でトリガーワードを特定す�
 保存先: `scripts/flux_prompts.json`
 
 **idの命名ルール：**
-- `C01`, `C02`, ... と連番
+- **単一テーマ**: `C01`, `C02`, ... と連番
+- **マルチテーマ**: `T1_C01`, `T2_C01`, `T3_C01` のようにテーマプレフィックス付き。全テーマを1ファイルに混在させ、Step 5 の生成時に `--scenes` でフィルタする
 - plan-videoのScene番号に対応させる
 
 保存後、ユーザーにプロンプト一覧を提示して確認を求める。
 
 ---
 
-### Step 5: 画像を一括生成する
+### Step 5: 画像を生成する
 
-ユーザーの承認後、以下のコマンドで一括生成する：
+ユーザーの承認後、生成する。**テーマ数によってフローが分岐する**。
 
 #### 5-1. SSH接続情報を取得する
 
-`ssh.md` を読んでRunPodのIP・ポートを取得する。
+`ssh.md` を読んでPod 1 のIP・ポートを取得する。マルチテーマ時は並列Podの情報も揃える。
 
-#### 5-2. 生成コマンドを実行する
+#### 5-2a. 単一テーマの場合（Pod 1 のみ）
 
 ```bash
 python3 scripts/generate_flux_images.py \
-  --host <IP> \
-  --port <PORT> \
+  --host <POD1_IP> \
+  --port <POD1_PORT> \
   --prompts scripts/flux_prompts.json \
   --lora <LoRAファイル名> \
   --lora-strength 0.8 \
   --steps 20 \
   --width 768 \
-  --height 1024
+  --height 1024 \
+  --output-dir 作業中動画 \
+  --copy-to-input
 ```
 
 - LoRA不使用の場合は `--lora` を省略
-- 生成結果は `作業中動画/flux_C01.png` 等に自動保存される
+- `--copy-to-input` で同一PodでWan I2Vを続けて回せるようにする
+
+#### 5-2b. マルチテーマの場合（プール方式・ゼロアイドル）
+
+**方針: 全Podに全シーン（テーマ混在）を渡し、ロックで未着手を取り合う**。テーマ境界を無視するので、空きPodは即座に別テーマの未着手カットを拾いに行く。
+
+プロンプトJSONは1ファイル（`scripts/flux_prompts.json`）に全テーマの id を混在させる:
+
+```json
+[
+  { "id": "T1_C01", "prompt": "..." },
+  { "id": "T2_C01", "prompt": "..." },
+  { "id": "T3_C01", "prompt": "..." }
+]
+```
+
+**`--output-root 作業中動画`** を指定すると、各スクリプトはシーンIDの `T{N}_` プレフィックスから `作業中動画/theme{N}/flux_T{N}_C{NN}.png` へ自動ルーティングする。ロックディレクトリは `作業中動画/.locks_flux/` で全Pod共通。
+
+- **Pod 1（Volume付き）**: 全シーンを渡してプール実行
+
+  ```bash
+  python3 scripts/generate_flux_images.py \
+    --host <POD1_IP> --port <POD1_PORT> \
+    --prompts scripts/flux_prompts.json \
+    --output-root 作業中動画 \
+    --lora flux_japanese_girl_v2.safetensors \
+    --copy-to-input
+  ```
+
+- **並列Pod（Volume なし）**: `setup_parallel_pod.py --output-root` で end-to-end。`--scenes` は省略（全シーン対象）
+
+  ```bash
+  python3 scripts/setup_parallel_pod.py \
+    --flux-prompts scripts/flux_prompts.json \
+    --wan-prompts scripts/wan_i2v_prompts.json \
+    --lora flux_japanese_girl_v2.safetensors \
+    --output-root 作業中動画 \
+    --generate
+  ```
+
+  `--generate` で Flux → Wan 一気通貫。Wan の per-scene ループは Flux 画像がローカルに現れるまで最大10分待機するので、他Podが当該シーンの Flux をまだ生成中でも問題なく同期する。
+
+- **生成結果は**各Podがローカルの `作業中動画/theme{N}/flux_*.png` に自動振り分けでダウンロードする。全Podの完了後にStep 5-3（クオリティゲート）に進む
 
 #### 5-3. 生成結果を確認する（クオリティゲート）
 
@@ -191,7 +272,7 @@ python3 scripts/generate_flux_images.py \
 生成結果: 作業中動画/flux_C01.png 〜 flux_CXX.png
 
 次のステップ:
-- クリップ生成に進む場合は /wan-video /kling-video /runway-video を使ってください
+- クリップ生成に進む場合は /wan-video を使ってください
 ```
 
 ---

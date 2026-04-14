@@ -108,18 +108,17 @@ OssMovieAIz/
 - 運用ガイド: `RunPodの運用方法.md`
 - 構築仕様: `AI動画生成＆LoRA学習環境 構築仕様書.md`
 
-### 複数Pod並列運用（プール方式・ゼロアイドル）
+### 複数Pod並列運用（役割分離・プール方式）
 - Network Volumeは同時に1つのPodにしかマウントできない
-- **Pod 1**: Network Volume付き → `/runpod-start` で起動（4090優先→5分待ち→5090フォールバック）
-- **Pod 2以降**: Volume なし → `scripts/setup_parallel_pod.py` で**作成・セットアップ・Flux生成・Wan生成まで一気通貫**
-- **全Podが同じシーンリスト（テーマ混在）を受け取り、ロックで未着手を取り合う**。テーマ境界は無視。空きPodが出ない
-- Flux もWanも同じ仕組み。各スクリプトに `--output-root 作業中動画` を渡すと、シーンIDの `T{N}_` プレフィックスから `作業中動画/theme{N}/` へ自動ルーティングされる
-- Flux 画像のPod間共有はローカルMacが中継点: Pod 1 が T2_C03 を Flux 生成 → ローカル theme2/ にDL → Pod 2 が Wan 時に同じ画像をSCPアップロード
-- Wan の per-scene ループは Flux 画像がローカルに現れるまで最大10分待機するので、他Podが当該シーンの Flux をまだ生成中でも安全に同期する
+- **Pod 1（Flux + Wan）**: Network Volume付き → `/runpod-start` で起動。**Flux画像生成はPod1専用**（NVMe I/Oが速く、fp8モデル初回ロードが安定）
+- **Pod 2以降（Wan専用）**: Volume なし → `scripts/setup_parallel_pod.py` で作成。`setup_comfyui.sh --wan-only` でFlux/LoRAをスキップし、Wan 2.1モデルのみインストール（containerDisk 50GBで十分）
+- **Wan生成はロック分配**: 全Podが同じシーンリストを受け取り、ロックで未着手を取り合う。テーマ境界は無視。空きPodが出ない
+- 各スクリプトに `--output-root 作業中動画` を渡すと、シーンIDの `T{N}_` プレフィックスから `作業中動画/theme{N}/` へ自動ルーティングされる
+- **Flux画像のPod間共有**: Pod1がFlux生成 → ローカルにDL → Pod2以降がWan実行時に `generate_wan_i2v.py` がローカルからSCPアップロード（ローカルMacが中継点）
+- Wan の per-scene ループは Flux 画像がローカルに現れるまで最大10分待機
 
 ```bash
-# ── Pod 1（Volume付き）で プール生成 ──
-# 全シーンの Flux をロック分配（空き分を取りに行く）
+# ── Pod 1（Volume付き）: Flux画像を全シーン生成 ──
 python3 scripts/generate_flux_images.py \
   --host $POD1_IP --port $POD1_PORT \
   --prompts scripts/flux_prompts.json \
@@ -127,30 +126,21 @@ python3 scripts/generate_flux_images.py \
   --lora flux_japanese_girl_v2.safetensors \
   --copy-to-input
 
-# 続けて Wan を Pod 1 でプール実行
+# Pod 1 でも Wan を並行実行
 python3 scripts/generate_wan_i2v.py \
   --host $POD1_IP --port $POD1_PORT \
   --prompts scripts/wan_i2v_prompts.json \
   --output-root 作業中動画 \
   --pod-id $POD1_ID
 
-# ── Pod 2/3（Volume なし）: 各Podが全シーンを end-to-end 実行 ──
+# ── Pod 2/3（Wan専用）: Pod作成 → セットアップ(--wan-only) → 画像アップロード → Wan生成 ──
 python3 scripts/setup_parallel_pod.py \
-  --flux-prompts scripts/flux_prompts.json \
   --wan-prompts scripts/wan_i2v_prompts.json \
-  --lora flux_japanese_girl_v2.safetensors \
-  --output-root 作業中動画 \
-  --generate
-
-python3 scripts/setup_parallel_pod.py \
-  --flux-prompts scripts/flux_prompts.json \
-  --wan-prompts scripts/wan_i2v_prompts.json \
-  --lora flux_japanese_girl_v2.safetensors \
   --output-root 作業中動画 \
   --generate
 
 # ※ --scenes を省略するとプロンプトJSONの全シーンが対象になる（推奨）
-# ※ 特定Podに明示的に割当したいときだけ --scenes T2_C01,T2_C02 を付ける
+# ※ --flux-prompts は廃止（Pod1専用に統一）
 # ※ 単一テーマなら従来どおり --output-dir 作業中動画/theme1 を使う
 ```
 

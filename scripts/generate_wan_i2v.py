@@ -29,6 +29,7 @@ import fcntl
 import json
 import os
 import random
+import re
 import subprocess
 import sys
 import time
@@ -37,11 +38,30 @@ SSH_KEY = os.path.expanduser("~/.ssh/id_ed25519")
 RUNPOD_API_URL = "https://api.runpod.io/graphql"
 COMFYUI_OUTPUT_DIR = "/workspace/ComfyUI/output"
 DEFAULT_OUTPUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../作業中動画")
-LOCAL_OUTPUT_DIR = DEFAULT_OUTPUT_DIR  # --output-dir で上書き可能
+LOCAL_OUTPUT_DIR = DEFAULT_OUTPUT_DIR  # --output-dir で上書き
+OUTPUT_ROOT = ""  # --output-root で設定（空ならシングルディレクトリモード）
 WORKFLOW_TEMPLATE = os.path.join(os.path.dirname(os.path.abspath(__file__)),
     "../.claude/skills/wan-video/workflow_template.json")
 
 LOCK_DIR = os.path.join(DEFAULT_OUTPUT_DIR, ".locks")  # --output-dir で連動
+
+THEME_PREFIX_RE = re.compile(r"^T(\d+)_")
+
+
+def theme_dir_from_id(cut_id, root):
+    """シーンIDの T{N}_ プレフィックスから theme{N} フォルダを返す。
+    プレフィックスが無ければ root 直下。"""
+    m = THEME_PREFIX_RE.match(cut_id)
+    if m:
+        return os.path.join(root, f"theme{m.group(1)}")
+    return root
+
+
+def resolve_theme_dir(cut_id):
+    """シーンのローカル保存先フォルダを返す。--output-root 指定時はテーマ自動ルーティング"""
+    if OUTPUT_ROOT:
+        return theme_dir_from_id(cut_id, OUTPUT_ROOT)
+    return LOCAL_OUTPUT_DIR
 NEGATIVE_PROMPT = "blurry, distorted, low quality, shaky, deformed hands, extra fingers, watermark, text overlay"
 
 
@@ -165,28 +185,36 @@ def scp_upload(host, port, local_path, remote_path):
     return result.returncode == 0
 
 
-def upload_images(host, port, prompts):
-    """プロンプトで参照される画像をPodにアップロード（未アップロードのみ）"""
-    remote_input_dir = "/workspace/ComfyUI/input"
-    image_names = list({p["image"] for p in prompts})
-    # リモートに既にある画像を確認
-    existing = ssh(host, port, f"ls {remote_input_dir}/ 2>/dev/null", check=False)
-    existing_files = set(existing.split())
+def resolve_local_image(cut_id, image_name):
+    """シーンの参照画像のローカルパス候補を順に返す（最初に見つかったものを使う）"""
+    candidates = []
+    if OUTPUT_ROOT:
+        # テーマ自動ルーティング
+        candidates.append(os.path.join(theme_dir_from_id(cut_id, OUTPUT_ROOT), image_name))
+        # フォールバック: root 直下
+        candidates.append(os.path.join(OUTPUT_ROOT, image_name))
+    candidates.append(os.path.join(LOCAL_OUTPUT_DIR, image_name))
+    return candidates
 
-    uploaded = 0
-    for img in image_names:
-        if img in existing_files:
-            continue
-        local_path = os.path.join(LOCAL_OUTPUT_DIR, img)
-        if not os.path.exists(local_path):
-            print(f"  ⚠️  ローカルに画像がありません: {local_path}", file=sys.stderr)
-            continue
-        ok = scp_upload(host, port, local_path, f"{remote_input_dir}/{img}")
-        if ok:
-            uploaded += 1
-        else:
-            print(f"  ⚠️  アップロード失敗: {img}", file=sys.stderr)
-    return uploaded, len(image_names)
+
+def wait_for_local_image(cut_id, image_name, timeout=600, interval=10):
+    """ローカルに Flux 画像が現れるまで待つ。他Podが生成中のケースに対応"""
+    start = time.time()
+    while time.time() - start < timeout:
+        for p in resolve_local_image(cut_id, image_name):
+            if os.path.exists(p):
+                return p
+        elapsed = int(time.time() - start)
+        print(f"  他Podが Flux 生成中... ローカル画像待機 ({elapsed}s / {timeout}s)", flush=True)
+        time.sleep(interval)
+    return None
+
+
+def upload_single_image(host, port, local_path, image_name):
+    """1枚だけアップロード。既存があれば削除して置換"""
+    remote_input_dir = "/workspace/ComfyUI/input"
+    ssh(host, port, f"rm -f {remote_input_dir}/{image_name}", check=False)
+    return scp_upload(host, port, local_path, f"{remote_input_dir}/{image_name}")
 
 
 def check_comfyui(host, port):
@@ -286,12 +314,21 @@ def main():
     parser.add_argument("--pod-id", default="", help="RunPod Pod ID（指定すると完了後にPod停止を提案）")
     parser.add_argument("--terminate", action="store_true", help="Pod停止時にterminateを使う（Volumeなし用）")
     parser.add_argument("--clean-locks", action="store_true", help="開始前にロックファイルを全削除する")
-    parser.add_argument("--output-dir", default="", help="入出力ディレクトリ（デフォルト: 作業中動画/）")
+    parser.add_argument("--output-dir", default="", help="入出力ディレクトリ（単一テーマ用）")
+    parser.add_argument("--output-root", default="",
+                        help="並列プールモードのルート。シーンIDのT{N}_プレフィックスから theme{N}/ へ自動ルーティング（--output-dir と排他）")
     args = parser.parse_args()
 
     # 出力先ディレクトリの上書き
-    global LOCAL_OUTPUT_DIR, LOCK_DIR
-    if args.output_dir:
+    global LOCAL_OUTPUT_DIR, OUTPUT_ROOT, LOCK_DIR
+    if args.output_root and args.output_dir:
+        print("❌ --output-root と --output-dir は同時指定できません", file=sys.stderr)
+        sys.exit(1)
+    if args.output_root:
+        OUTPUT_ROOT = args.output_root
+        LOCK_DIR = os.path.join(OUTPUT_ROOT, ".locks")
+        os.makedirs(OUTPUT_ROOT, exist_ok=True)
+    elif args.output_dir:
         LOCAL_OUTPUT_DIR = args.output_dir
         LOCK_DIR = os.path.join(args.output_dir, ".locks")
         os.makedirs(LOCAL_OUTPUT_DIR, exist_ok=True)
@@ -319,7 +356,11 @@ def main():
         prompts = [p for p in prompts if p["id"] in scene_filter]
         print(f"対象シーン: {[p['id'] for p in prompts]}")
 
-    os.makedirs(LOCAL_OUTPUT_DIR, exist_ok=True)
+    if OUTPUT_ROOT:
+        print(f"プールモード: output-root={OUTPUT_ROOT}, lock={LOCK_DIR}")
+    else:
+        os.makedirs(LOCAL_OUTPUT_DIR, exist_ok=True)
+        print(f"単体モード: output-dir={LOCAL_OUTPUT_DIR}")
 
     # ロックファイルのクリーンアップ
     if args.clean_locks:
@@ -348,13 +389,8 @@ def main():
                 except Exception:
                     pass
 
-    # 参照画像のアップロード
-    print("参照画像を確認中...")
-    uploaded, total = upload_images(args.host, args.port, prompts)
-    if uploaded > 0:
-        print(f"  {uploaded}/{total} 枚アップロード完了")
-    else:
-        print(f"  全 {total} 枚アップロード済み")
+    # 参照画像は per-scene で just-in-time アップロード（プール運用で他Podが
+    # まだ Flux 生成中のケースに対応するため、ループ内でローカル出現を待つ）
 
     # 生成ループ（ロックベースの分散処理、最大2周）
     results = []
@@ -369,7 +405,9 @@ def main():
                 prompt_text = item["prompt"]
                 image_name = item["image"]
                 output_prefix = f"scene_{cut_id}_wan21"
-                local_file = os.path.join(LOCAL_OUTPUT_DIR, f"scene_{cut_id}_wan21.mp4")
+                theme_dir = resolve_theme_dir(cut_id)
+                os.makedirs(theme_dir, exist_ok=True)
+                local_file = os.path.join(theme_dir, f"scene_{cut_id}_wan21.mp4")
 
                 # 既に完成済み
                 if os.path.exists(local_file):
@@ -400,6 +438,27 @@ def main():
                 print(f"\n[{cut_id}] 生成開始 {label}({i}/{len(prompts_list)})")
                 print(f"  画像: {image_name}")
                 print(f"  プロンプト: {prompt_text[:80]}...")
+
+                # 参照画像のローカル出現を待ってからアップロード（プール運用で他Podが Flux 生成中のケース）
+                local_image = None
+                for p in resolve_local_image(cut_id, image_name):
+                    if os.path.exists(p):
+                        local_image = p
+                        break
+                if not local_image:
+                    local_image = wait_for_local_image(cut_id, image_name, timeout=600)
+                if not local_image:
+                    print(f"  [スキップ] Flux 画像がローカルに現れませんでした: {image_name}", file=sys.stderr)
+                    pass_results.append({"id": cut_id, "status": "skipped_by_other"})
+                    release_lock(cut_id, lock_file)
+                    del lock_files[cut_id]
+                    continue
+                if not upload_single_image(args.host, args.port, local_image, image_name):
+                    print(f"  [エラー] 画像アップロード失敗: {image_name}", file=sys.stderr)
+                    pass_results.append({"id": cut_id, "status": "error"})
+                    release_lock(cut_id, lock_file)
+                    del lock_files[cut_id]
+                    continue
 
                 seed = args.seed if args.seed > 0 else random.randint(1, 2**32)
                 wf = build_workflow(template, prompt_text, image_name, output_prefix, seed,
@@ -461,7 +520,7 @@ def main():
         retry_prompts = []
         for item in prompts:
             if item["id"] in skipped_other_ids:
-                local_file = os.path.join(LOCAL_OUTPUT_DIR, f"scene_{item['id']}_wan21.mp4")
+                local_file = os.path.join(resolve_theme_dir(item["id"]), f"scene_{item['id']}_wan21.mp4")
                 if not os.path.exists(local_file):
                     retry_prompts.append(item)
         if retry_prompts:

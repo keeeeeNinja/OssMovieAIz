@@ -41,9 +41,18 @@ if [ "$1" = "--restart" ]; then
   exit 0
 fi
 
+# --- --wan-only mode: Flux/LoRAをスキップしてWan専用Podにする ---
+WAN_ONLY=false
+for arg in "$@"; do
+  [ "$arg" = "--wan-only" ] && WAN_ONLY=true
+done
+
 echo '============================================'
 echo '  ComfyUI + Wan 2.1 I2V Auto Setup'
 echo '  + SageAttention / TeaCache / MP4出力'
+if $WAN_ONLY; then
+  echo '  [WAN-ONLY] Flux/LoRA skip'
+fi
 echo '============================================'
 
 # --- 1. SSH key (Claude Codeからリモート操作する場合) ---
@@ -141,6 +150,7 @@ wait $PID_W1 $PID_W2 $PID_W3 $PID_W4
 echo '[5/8] All Wan models downloaded'
 
 # --- 5b. Flux.1-dev Models (fp8, parallel download) ---
+if ! $WAN_ONLY; then
 echo '[5b/8] Downloading Flux.1-dev fp8 models...'
 
 mkdir -p /workspace/ComfyUI/models/unet
@@ -200,6 +210,11 @@ do
 done
 wait
 echo '[5c/8] LoRAs downloaded'
+
+else
+echo '[5b/8] [WAN-ONLY] Flux models skipped'
+echo '[5c/8] [WAN-ONLY] LoRAs skipped'
+fi
 
 # --- 6. ffmpeg確認（MP4出力に必要） ---
 echo '[6/8] Checking ffmpeg...'
