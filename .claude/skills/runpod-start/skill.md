@@ -1,6 +1,6 @@
 ---
 name: runpod-start
-description: RunPod APIでRTX 4090 Podを立ち上げ、SSH接続確認、setup_comfyui.sh実行、ssh.md更新まで一気通貫で行う。「Pod立ち上げて」「RunPod起動」「Pod起動して」という場面で必ず使う。
+description: RunPod APIでPodを立ち上げ、SSH接続確認、setup_comfyui.sh実行、ssh.md更新まで一気通貫で行う。「Pod立ち上げて」「RunPod起動」「Pod起動して」という場面で必ず使う。「5090で」と言われたら5090モードで起動する。
 allowed-tools: Bash, Read, Write, Edit
 ---
 
@@ -17,11 +17,22 @@ RunPod GraphQL APIを使ってPodを作成し、ComfyUIが使える状態にす�
 
 ---
 
+### GPUモード判定
+
+ユーザーの指示から使用するGPUを判定する:
+
+| ユーザーの指示 | GPUモード | Dockerイメージ | setup_comfyui.shフラグ |
+|---|---|---|---|
+| 「Pod起動して」（デフォルト） | RTX 4090 | `runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04` | `--restart` |
+| 「5090で起動して」 | RTX 5090 | `runpod/pytorch:2.8.0-py3.12-cuda12.8.1-devel-ubuntu22.04` | `--restart --5090` |
+
+---
+
 ### 実行手順
 
-#### Step 1: Pod作成（4090優先 / 在庫切れなら3090フォールバック）
+#### Step 1: Pod作成
 
-まず **RTX 4090** で作成を試す:
+**RTX 4090モード（デフォルト）:**
 
 ```bash
 source ~/.zshrc && curl -s -H "Authorization: Bearer $RUNPOD_API_KEY" \
@@ -31,28 +42,25 @@ source ~/.zshrc && curl -s -H "Authorization: Bearer $RUNPOD_API_KEY" \
   }' https://api.runpod.io/graphql
 ```
 
-**GPU フォールバック戦略:**
-
-1. **RTX 4090** で作成を試す
-2. 在庫切れ（`podFindAndDeployOnDemand` が null）なら **30秒間隔で最大10分リトライ**
-3. 10分待っても確保できなければ **RTX 3090** にフォールバック（Pod名も `ComfyUI-3090` に変更）
-4. **RTX 5090 は使わない**（Blackwell世代はPyTorch 2.6+/CUDA 12.6+が必要で、現在のComfyUI環境と互換性がない）
-5. 3090 も取れなければユーザーに報告して停止
-
-> Why: 5090はComfyUI標準環境（PyTorch 2.4 + CUDA 12.4）で「CUDA error: no kernel image is available」エラーが出て使えない。3090は4090比1.5倍遅い（Wan I2V 1クリップ6分→10分）が、追加セットアップなしで確実に動く。
-
-**3090 フォールバック時のmutation:**
+**RTX 5090モード:**
 
 ```bash
 source ~/.zshrc && curl -s -H "Authorization: Bearer $RUNPOD_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
-    "query": "mutation { podFindAndDeployOnDemand(input: { name: \"ComfyUI-3090\", gpuTypeId: \"NVIDIA GeForce RTX 3090\", gpuCount: 1, volumeInGb: 0, containerDiskInGb: 80, networkVolumeId: \"c1dbeweh5j\", volumeMountPath: \"/workspace\", imageName: \"runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04\", startSsh: true, ports: \"22/tcp,8188/http\", dataCenterId: \"EU-RO-1\", env: [{ key: \"HF_TOKEN\", value: \"{{ RUNPOD_SECRET_HF_TOKEN }}\" }] }) { id name desiredStatus } }"
+    "query": "mutation { podFindAndDeployOnDemand(input: { name: \"ComfyUI-5090\", gpuTypeId: \"NVIDIA GeForce RTX 5090\", gpuCount: 1, volumeInGb: 0, containerDiskInGb: 80, networkVolumeId: \"c1dbeweh5j\", volumeMountPath: \"/workspace\", imageName: \"runpod/pytorch:2.8.0-py3.12-cuda12.8.1-devel-ubuntu22.04\", startSsh: true, ports: \"22/tcp,8188/http\", dataCenterId: \"EU-RO-1\", env: [{ key: \"HF_TOKEN\", value: \"{{ RUNPOD_SECRET_HF_TOKEN }}\" }] }) { id name desiredStatus } }"
   }' https://api.runpod.io/graphql
 ```
 
+**GPU フォールバック戦略:**
+
+1. 指定されたGPUで作成を試す
+2. 在庫切れなら **30秒間隔で最大5分リトライ**
+3. 4090モードで5分待っても取れなければ **5090にフォールバック**（setup_comfyui.shは `--restart --5090` に切り替え、Dockerイメージも5090用に変更）
+4. 5090モードで取れなければユーザーに報告して停止
+
 **デフォルト設定:**
-- GPU: RTX 4090（10分在庫切れなら RTX 3090 にフォールバック）
+- GPU: ユーザー指示による（デフォルト4090）
 - リージョン: EU-RO-1
 - Network Volume: `c1dbeweh5j`（100GB、/workspace マウント）
 - ポート: 22/tcp（SSH）、8188/http（ComfyUI）
@@ -92,16 +100,24 @@ ssh -T root@<IP> -p <PORT> -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no \
   'grep -z "HF_TOKEN" /proc/1/environ | tr "\0" "\n" >> /root/.bashrc && echo "HF_TOKEN exported"'
 ```
 
-#### Step 5: setup_comfyui.sh --restart 実行
+#### Step 5: setup_comfyui.sh 実行
 
-Network Volume付きなので `--restart` モード（pip依存再インストール + ComfyUI起動）:
+Network Volume付きなので `--restart` モード（pip依存再インストール + ComfyUI起動）。
+5090モードの場合は `--5090` フラグを追加する。
 
+**4090の場合:**
 ```bash
 ssh -T root@<IP> -p <PORT> -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no \
   'wget -qO- https://raw.githubusercontent.com/keeeeeNinja/OssMovieAIz/master/setup_comfyui.sh | bash -s -- --restart'
 ```
 
-**タイムアウト: 180秒**（pip install + ComfyUI起動 + ヘルスチェック待ち）
+**5090の場合:**
+```bash
+ssh -T root@<IP> -p <PORT> -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no \
+  'wget -qO- https://raw.githubusercontent.com/keeeeeNinja/OssMovieAIz/master/setup_comfyui.sh | bash -s -- --restart --5090'
+```
+
+**タイムアウト: 300秒**（5090はPyTorch nightlyインストールに時間がかかる場合あり）
 
 #### Step 6: ssh.md 更新
 
@@ -139,4 +155,5 @@ ssh root@<IP> -p <PORT> -i ~/.ssh/id_ed25519
 | `invalid mount config` | volumeMountPath未指定 | `/workspace` を指定 |
 | HF_TOKEN が空 | SSHセッションに環境変数が渡らない | `/proc/1/environ` から読み込む（Step 4） |
 | EU-RO-1にGPUがない | 在庫切れ | `dataCenterId` を削除してAny regionにする |
-| 4090も3090も取れない | 全リージョン在庫切れ | ユーザーに報告して停止。5090は使わない（ComfyUI互換性問題） |
+| GPUが取れない | 全リージョン在庫切れ | ユーザーに報告して停止 |
+| 5090で「CUDA error: no kernel image」 | PyTorch/CUDAバージョン不一致 | setup_comfyui.shに `--5090` を渡しているか確認。Dockerイメージが `cuda12.8` 以上であること |

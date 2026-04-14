@@ -4,8 +4,16 @@ set -e
 # --- Quick restart mode: pip依存だけ再インストールしてComfyUI起動 ---
 # Network Volume付きPodの再起動時に使用（モデル・ノードは永続化済み）
 # 使い方: bash setup_comfyui.sh --restart
-if [ "$1" = "--restart" ]; then
+RESTART_MODE=false
+RESTART_5090=false
+for arg in "$@"; do
+  [ "$arg" = "--restart" ] && RESTART_MODE=true
+  [ "$arg" = "--5090" ] && RESTART_5090=true
+done
+
+if $RESTART_MODE; then
   echo '=== Quick Restart: pip依存の再インストール + ComfyUI起動 ==='
+  if $RESTART_5090; then echo '  [5090] Blackwell mode'; fi
   pkill -f 'python.*main.py' 2>/dev/null || true
   sleep 2
   fuser -k 8188/tcp 2>/dev/null || true
@@ -18,10 +26,22 @@ if [ "$1" = "--restart" ]; then
   # pip依存（Pod再起動でリセットされるため毎回必要）
   cd /workspace/ComfyUI
   pip install -q -r requirements.txt
+  # 5090: PyTorch nightlyで差し替え
+  if $RESTART_5090; then
+    echo '  [5090] Installing PyTorch nightly (cu128)...'
+    pip install --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/cu128 -q
+  fi
   cd /workspace/ComfyUI/custom_nodes/ComfyUI-GGUF && pip install -q -r requirements.txt && pip install -q gguf
   cd /workspace/ComfyUI/custom_nodes/ComfyUI-KJNodes && pip install -q -r requirements.txt 2>/dev/null || true
   cd /workspace/ComfyUI/custom_nodes/ComfyUI-VideoHelperSuite && pip install -q -r requirements.txt 2>/dev/null || true
-  pip install -q sageattention 2>/dev/null || true
+  if $RESTART_5090; then
+    # 5090: SageAttentionをソースからビルド
+    cd /workspace
+    [ ! -d "SageAttention" ] && git clone -q https://github.com/thu-ml/SageAttention.git
+    cd SageAttention && git pull -q && pip install -q -e . 2>/dev/null || true
+  else
+    pip install -q sageattention 2>/dev/null || true
+  fi
 
   # ComfyUI起動
   cd /workspace/ComfyUI
@@ -41,10 +61,12 @@ if [ "$1" = "--restart" ]; then
   exit 0
 fi
 
-# --- --wan-only mode: Flux/LoRAをスキップしてWan専用Podにする ---
+# --- フラグ解析 ---
 WAN_ONLY=false
+BLACKWELL=false
 for arg in "$@"; do
   [ "$arg" = "--wan-only" ] && WAN_ONLY=true
+  [ "$arg" = "--5090" ] && BLACKWELL=true
 done
 
 echo '============================================'
@@ -52,6 +74,9 @@ echo '  ComfyUI + Wan 2.1 I2V Auto Setup'
 echo '  + SageAttention / TeaCache / MP4出力'
 if $WAN_ONLY; then
   echo '  [WAN-ONLY] Flux/LoRA skip'
+fi
+if $BLACKWELL; then
+  echo '  [5090] Blackwell mode: PyTorch nightly + CUDA 12.8'
 fi
 echo '============================================'
 
@@ -78,6 +103,13 @@ cd ComfyUI
 git checkout master 2>/dev/null || true
 git pull origin master 2>/dev/null || true
 pip install -q -r requirements.txt
+
+# Blackwell (5090): PyTorch nightlyでCUDA 12.8対応に差し替え
+if $BLACKWELL; then
+  echo '  [5090] Installing PyTorch nightly (cu128) for Blackwell...'
+  pip install --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/cu128 -q
+  echo '  [5090] PyTorch nightly installed'
+fi
 echo '[3/8] ComfyUI installed (latest)'
 
 # --- 3. Custom Nodes ---
@@ -105,15 +137,26 @@ echo '[4/8] Custom nodes installed (Manager, GGUF, KJNodes, VideoHelperSuite)'
 
 # --- 4. SageAttention (pip) ---
 echo '[5/9] Installing SageAttention...'
-pip install -q sageattention 2>/dev/null || {
-  echo '  SageAttention pip install failed, trying from source...'
+if $BLACKWELL; then
+  # 5090: ソースからビルド（Blackwell対応にはnightly PyTorch + ソースビルドが必要）
+  echo '  [5090] Building SageAttention from source for Blackwell...'
   cd /workspace
   if [ ! -d "SageAttention" ]; then
     git clone https://github.com/thu-ml/SageAttention.git
   fi
-  cd SageAttention
+  cd SageAttention && git pull -q
   pip install -q -e . 2>/dev/null || echo '  WARNING: SageAttention install failed. Will run without it.'
-}
+else
+  pip install -q sageattention 2>/dev/null || {
+    echo '  SageAttention pip install failed, trying from source...'
+    cd /workspace
+    if [ ! -d "SageAttention" ]; then
+      git clone https://github.com/thu-ml/SageAttention.git
+    fi
+    cd SageAttention
+    pip install -q -e . 2>/dev/null || echo '  WARNING: SageAttention install failed. Will run without it.'
+  }
+fi
 echo '[4/8] SageAttention done'
 
 # --- 5. Wan 2.1 I2V Models (parallel download) ---

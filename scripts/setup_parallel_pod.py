@@ -120,6 +120,12 @@ GPU_FALLBACK = "NVIDIA GeForce RTX 5090"
 PRIMARY_WAIT_SECONDS = 300  # 4090 を 5分待つ
 PRIMARY_RETRY_INTERVAL = 30  # 30秒間隔でリトライ
 
+# GPU別Dockerイメージ
+DOCKER_IMAGES = {
+    GPU_PRIMARY: "runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04",
+    GPU_FALLBACK: "runpod/pytorch:2.8.0-py3.12-cuda12.8.1-devel-ubuntu22.04",
+}
+
 
 def _try_create_pod(api_key, name, gpu_type, region, disk_gb):
     """単発でPod作成を試す。成功時はpod_id、失敗時はNoneを返す"""
@@ -133,7 +139,7 @@ def _try_create_pod(api_key, name, gpu_type, region, disk_gb):
             gpuCount: 1,
             volumeInGb: 0,
             containerDiskInGb: {disk_gb},
-            imageName: "runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04",
+            imageName: "{DOCKER_IMAGES.get(gpu_type, DOCKER_IMAGES[GPU_PRIMARY])}",
             startSsh: true,
             ports: "22/tcp,8188/http",
             {env_block}
@@ -247,19 +253,22 @@ def verify_ssh(ip, port, max_retries=6):
 # =============================================================
 #  Step 4: ComfyUI + Wan 2.1 セットアップ
 # =============================================================
-def run_setup(ip, port):
+def run_setup(ip, port, gpu_type=GPU_PRIMARY):
     """setup_comfyui.sh をアップロードして実行"""
     # setup_comfyui.sh をアップロード
     if not scp_upload(ip, port, SETUP_SCRIPT, "/root/setup_comfyui.sh"):
         print("❌ setup_comfyui.sh のアップロードに失敗", file=sys.stderr)
         sys.exit(1)
 
+    # 5090の場合は --5090 フラグを追加
+    setup_flags = "--wan-only --5090" if gpu_type == GPU_FALLBACK else "--wan-only"
+
     # 実行（ストリーミング出力）
     cmd = [
         "ssh", "-T", "-o", "StrictHostKeyChecking=no",
         "-o", "ConnectTimeout=30",
         f"root@{ip}", "-p", str(port), "-i", SSH_KEY,
-        "bash /root/setup_comfyui.sh --wan-only"
+        f"bash /root/setup_comfyui.sh {setup_flags}"
     ]
     process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
     for line in process.stdout:
@@ -388,6 +397,7 @@ def main():
         print(f"  --scenes 未指定 → プロンプトJSONの全 {len(scene_ids)} シーンを対象にプール運用")
 
     # --- Step 1: Pod作成 or 既存Pod ---
+    actual_gpu = GPU_PRIMARY  # デフォルト（既存Pod使用時）
     if args.pod_id:
         pod_id = args.pod_id
         print(f"既存Pod使用: {pod_id}")
@@ -420,7 +430,7 @@ def main():
     # --- Step 4: セットアップ ---
     print()
     print("[4/6] ComfyUI + Wan 2.1 セットアップ中（約5-10分）...")
-    run_setup(ip, port)
+    run_setup(ip, port, actual_gpu)
 
     # --- Step 5: ComfyUI起動確認 ---
     print()
