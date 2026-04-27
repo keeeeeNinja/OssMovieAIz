@@ -12,10 +12,20 @@ ossmovie:
   base_path: /runpod-volume/ComfyUI/
 
   checkpoints: models/checkpoints/
-  unet: models/unet/
-  diffusion_models: models/diffusion_models/
-  clip: models/text_encoders/
-  text_encoders: models/text_encoders/
+  # Flux/Wan 本体は historically `unet/` に配置、ComfyUI v5+ で diffusion_models/ も探索
+  unet: |
+    models/unet/
+    models/diffusion_models/
+  diffusion_models: |
+    models/unet/
+    models/diffusion_models/
+  # text_encoders は ComfyUI v5+ で `clip/` から改名。当 Volume は両方併存（旧 clip/ に t5xxl, 新 text_encoders/ に umt5）
+  clip: |
+    models/text_encoders/
+    models/clip/
+  text_encoders: |
+    models/text_encoders/
+    models/clip/
   clip_vision: models/clip_vision/
   vae: models/vae/
   loras: models/loras/
