@@ -1,0 +1,27 @@
+# Network Volume (/runpod-volume) 上のモデル配置を ComfyUI に教える設定
+# 既存 Pod 運用では /workspace/ComfyUI/models/ にモデルを置いていたが、
+# Serverless ではマウントパスが /runpod-volume 固定なので
+# /runpod-volume/ComfyUI/models/ をルートにする
+#
+# Pod 運用と互換のままにしたい場合は Volume 内に
+#   /runpod-volume/ComfyUI/models/ -> 既存パス
+# としておけば extra_model_paths.yaml は不要になる
+# （ここでは明示する。Phase 6 で Pod 実機検証してから簡素化を判断）
+
+ossmovie:
+  base_path: /runpod-volume/ComfyUI/
+
+  checkpoints: models/checkpoints/
+  unet: models/unet/
+  diffusion_models: models/diffusion_models/
+  clip: models/text_encoders/
+  text_encoders: models/text_encoders/
+  clip_vision: models/clip_vision/
+  vae: models/vae/
+  loras: models/loras/
+  upscale_models: models/upscale_models/
+  embeddings: models/embeddings/
+  controlnet: models/controlnet/
+
+  # custom_nodes は Dockerfile 焼き込みのため不要
+  # （公式が Volume 経由を非推奨と明記）

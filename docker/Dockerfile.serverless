@@ -1,0 +1,31 @@
+# OssMovieAIz Serverless ComfyUI Worker
+# Base: runpod/worker-comfyui (公式)
+# Adds: ComfyUI-GGUF / ComfyUI-KJNodes / ComfyUI-VideoHelperSuite
+# Models / LoRAs are loaded from Network Volume mounted at /runpod-volume.
+
+ARG BASE_IMAGE=runpod/worker-comfyui:5.8.5-base
+FROM ${BASE_IMAGE}
+
+# 公式イメージは ComfyUI を /comfyui にインストールする
+WORKDIR /comfyui/custom_nodes
+
+# ComfyUI-GGUF (Wan2.1 GGUF モデル読み込み)
+RUN git clone --depth=1 https://github.com/city96/ComfyUI-GGUF.git \
+ && (cd ComfyUI-GGUF && pip install --no-cache-dir -r requirements.txt) \
+ && pip install --no-cache-dir gguf
+
+# ComfyUI-KJNodes (SageAttention / TeaCache / WanVideoTeaCacheKJ など)
+RUN git clone --depth=1 https://github.com/kijai/ComfyUI-KJNodes.git \
+ && (cd ComfyUI-KJNodes && pip install --no-cache-dir -r requirements.txt) || true
+
+# ComfyUI-VideoHelperSuite (CreateVideo / SaveVideo)
+RUN git clone --depth=1 https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite.git \
+ && (cd ComfyUI-VideoHelperSuite && pip install --no-cache-dir -r requirements.txt) || true
+
+# SageAttention (4090 は pip 1 発で入る、5090 用は別途ベース変更が必要)
+RUN pip install --no-cache-dir sageattention || true
+
+# Network Volume のモデルパスを ComfyUI に教える
+COPY docker/extra_model_paths.yaml /comfyui/extra_model_paths.yaml
+
+WORKDIR /
