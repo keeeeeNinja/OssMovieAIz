@@ -31,9 +31,10 @@ import json
 import os
 import subprocess
 import sys
+import urllib.error
 import urllib.request
 
-RUNPOD_API_URL = "https://api.runpod.io/graphql"
+REST_BASE = "https://rest.runpod.io/v1"
 
 
 def get_api_key():
@@ -52,90 +53,68 @@ def get_api_key():
     return key
 
 
-def runpod_query(api_key, query, variables=None):
-    payload = {"query": query}
-    if variables:
-        payload["variables"] = variables
+def rest_post(api_key, path, body):
     req = urllib.request.Request(
-        RUNPOD_API_URL,
-        data=json.dumps(payload).encode("utf-8"),
+        f"{REST_BASE}{path}",
+        data=json.dumps(body).encode("utf-8"),
         headers={
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
         },
+        method="POST",
     )
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        return json.loads(resp.read().decode("utf-8"))
-
-
-# Template (Docker image + container 設定) を作る
-TEMPLATE_MUTATION = """
-mutation saveTemplate($input: SaveTemplateInput!) {
-  saveTemplate(input: $input) {
-    id
-    name
-  }
-}
-"""
-
-# Template を参照して Endpoint を作る
-ENDPOINT_MUTATION = """
-mutation saveEndpoint($input: EndpointInput!) {
-  saveEndpoint(input: $input) {
-    id
-    name
-    templateId
-    gpuIds
-  }
-}
-"""
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            return json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        body_txt = e.read().decode("utf-8", errors="replace")
+        sys.exit(f"❌ HTTP {e.code} {path}: {body_txt}")
 
 
 def create_template(api_key, name, image, registry_auth_id=None):
-    template_input = {
+    body = {
         "name": name,
         "imageName": image,
+        "isServerless": True,
         "containerDiskInGb": 20,
         "volumeInGb": 0,
-        "isServerless": True,
         "readme": "OssMovieAIz Serverless ComfyUI worker (auto-generated).",
-        # 公式 worker-comfyui のエントリポイントは /start.sh (handler 起動)
-        # COMFYUI_OUTPUT_PATH 等の環境変数で出力先を上書きしたい場合は env に追加
-        "env": [
-            {"key": "COMFY_OUTPUT_PATH", "value": "/runpod-volume/outputs"},
-        ],
+        "env": {"COMFY_OUTPUT_PATH": "/runpod-volume/outputs"},
     }
     if registry_auth_id:
-        template_input["containerRegistryAuthId"] = registry_auth_id
-    resp = runpod_query(api_key, TEMPLATE_MUTATION, {"input": template_input})
-    if "errors" in resp:
-        sys.exit(f"❌ Template 作成失敗: {resp['errors']}")
-    template_id = resp["data"]["saveTemplate"]["id"]
+        body["containerRegistryAuthId"] = registry_auth_id
+    data = rest_post(api_key, "/templates", body)
+    template_id = data.get("id")
+    if not template_id:
+        sys.exit(f"❌ Template 作成 response 異常: {data}")
     print(f"✅ Template 作成: {template_id} ({name})")
     return template_id
 
 
-def create_endpoint(api_key, name, template_id, volume_id, datacenter, gpu_ids,
+def create_endpoint(api_key, name, template_id, volume_id, datacenter, gpu_type_ids,
                     workers_min, workers_max, idle_timeout, exec_timeout_ms):
-    endpoint_input = {
+    body = {
         "name": name,
         "templateId": template_id,
-        "gpuIds": gpu_ids,                  # 例: "NVIDIA GeForce RTX 4090,NVIDIA GeForce RTX 5090"
+        "computeType": "GPU",
+        "gpuTypeIds": gpu_type_ids,
+        "gpuCount": 1,
         "networkVolumeId": volume_id,
-        "locations": datacenter,            # 例: "EU-RO-1"
+        "dataCenterIds": [datacenter],
         "workersMin": workers_min,
         "workersMax": workers_max,
-        "idleTimeout": idle_timeout,        # 秒
+        "idleTimeout": idle_timeout,
         "executionTimeoutMs": exec_timeout_ms,
         "scalerType": "QUEUE_DELAY",
         "scalerValue": 4,
+        "flashboot": True,
     }
-    resp = runpod_query(api_key, ENDPOINT_MUTATION, {"input": endpoint_input})
-    if "errors" in resp:
-        sys.exit(f"❌ Endpoint 作成失敗: {resp['errors']}")
-    data = resp["data"]["saveEndpoint"]
-    print(f"✅ Endpoint 作成: {data['id']} ({name})")
-    return data["id"]
+    data = rest_post(api_key, "/endpoints", body)
+    endpoint_id = data.get("id")
+    if not endpoint_id:
+        sys.exit(f"❌ Endpoint 作成 response 異常: {data}")
+    print(f"✅ Endpoint 作成: {endpoint_id} ({name})")
+    return endpoint_id
 
 
 def main():
@@ -146,7 +125,7 @@ def main():
     parser.add_argument("--kind", choices=["flux", "i2v", "both"], default="both")
     parser.add_argument("--gpu-ids",
                         default="NVIDIA GeForce RTX 4090,NVIDIA GeForce RTX 5090",
-                        help="プライオリティ順カンマ区切り")
+                        help="プライオリティ順カンマ区切り（REST では gpuTypeIds の配列に変換）")
     parser.add_argument("--workers-min", type=int, default=0)
     parser.add_argument("--workers-max", type=int, default=3)
     parser.add_argument("--idle-timeout", type=int, default=5,
@@ -163,13 +142,15 @@ def main():
     if args.kind in ("i2v", "both"):
         targets.append(("ossmovie-i2v", 900_000))
 
+    gpu_type_ids = [s.strip() for s in args.gpu_ids.split(",") if s.strip()]
+
     results = {}
     for name, exec_ms in targets:
         template_id = create_template(api_key, name, args.image,
                                       registry_auth_id=args.registry_auth_id or None)
         endpoint_id = create_endpoint(
             api_key, name, template_id, args.volume_id, args.datacenter,
-            args.gpu_ids, args.workers_min, args.workers_max,
+            gpu_type_ids, args.workers_min, args.workers_max,
             args.idle_timeout, exec_ms,
         )
         results[name] = endpoint_id
