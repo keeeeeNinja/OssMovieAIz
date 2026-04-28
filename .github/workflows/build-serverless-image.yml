@@ -3,6 +3,8 @@ name: Build Serverless ComfyUI Image
 on:
   push:
     branches: [master]
+    tags:
+      - 'v*'
     paths:
       - 'docker/**'
       - '.github/workflows/build-serverless-image.yml'
@@ -15,6 +17,21 @@ jobs:
       contents: read
       packages: write
     steps:
+      - name: Free disk space on runner
+        # base image (worker-comfyui) ≈ 数 GB + pip install + buildx cache で
+        # 標準 14GB ランナーを使い切るため、不要な pre-installed ツールを削除
+        run: |
+          df -h /
+          sudo rm -rf /usr/local/lib/android \
+                      /opt/ghc \
+                      /usr/share/dotnet \
+                      /opt/hostedtoolcache/CodeQL \
+                      /usr/local/share/boost \
+                      /usr/local/share/powershell \
+                      /usr/local/lib/node_modules
+          sudo docker image prune --all --force || true
+          df -h /
+
       - uses: actions/checkout@v4
 
       - uses: docker/setup-buildx-action@v3
@@ -30,7 +47,7 @@ jobs:
         with:
           images: ghcr.io/${{ github.repository_owner }}/ossmovie-comfyui
           tags: |
-            type=raw,value=latest
+            type=raw,value=latest,enable={{is_default_branch}}
             type=sha,prefix=,format=short
             type=ref,event=tag
 
@@ -42,4 +59,5 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
-          cache-to: type=gha,mode=max
+          # mode=min でキャッシュ容量を抑える（max はディスク逼迫の原因）
+          cache-to: type=gha,mode=min
