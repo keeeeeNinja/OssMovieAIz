@@ -27,11 +27,44 @@ c = boto3.client(
     region_name=os.environ["RUNPOD_S3_REGION"],  # RunPod は大文字 (EU-RO-1) を使う
 )
 
-paginator = c.get_paginator("list_objects_v2")
-total = 0
-for page in paginator.paginate(Bucket="c1dbeweh5j", Prefix=args.prefix):
-    for obj in page.get("Contents", []):
-        size_mb = obj["Size"] / (1024 * 1024)
-        print(f"{size_mb:>10.1f} MB  {obj['Key']}")
-        total += 1
-print(f"\n合計 {total} ファイル")
+bucket = os.environ.get("RUNPOD_VOLUME_ID", "c1dbeweh5j")
+
+
+def fmt_size(n):
+    """バイト数を読みやすい単位で。0/小サイズも判別したいので 1KB 未満はバイト表示。"""
+    if n < 1024:
+        return f"{n:>8d}  B"
+    if n < 1024 * 1024:
+        return f"{n/1024:>8.1f} KB"
+    if n < 1024 * 1024 * 1024:
+        return f"{n/1024/1024:>8.1f} MB"
+    return f"{n/1024/1024/1024:>8.2f} GB"
+
+
+prefix = args.prefix
+# RunPod S3 のクセ: Delimiter なしの list_objects_v2 が KeyCount=0,
+# IsTruncated=True を返すケースがある。Delimiter='/' を必ず指定する。
+total_files = 0
+total_dirs = 0
+continuation = None
+seen_tokens = set()
+for _ in range(100):
+    kwargs = dict(Bucket=bucket, Prefix=prefix, Delimiter="/", MaxKeys=1000)
+    if continuation:
+        kwargs["ContinuationToken"] = continuation
+    resp = c.list_objects_v2(**kwargs)
+    for p in resp.get("CommonPrefixes", []):
+        print(f"  {'<DIR>':>11}  {p['Prefix']}")
+        total_dirs += 1
+    for obj in resp.get("Contents", []):
+        print(f"  {fmt_size(obj['Size'])}  {obj['Key']}")
+        total_files += 1
+    if not resp.get("IsTruncated"):
+        break
+    next_token = resp.get("NextContinuationToken")
+    if not next_token or next_token in seen_tokens:
+        break
+    seen_tokens.add(next_token)
+    continuation = next_token
+
+print(f"\n合計 ファイル {total_files} / ディレクトリ {total_dirs}")
