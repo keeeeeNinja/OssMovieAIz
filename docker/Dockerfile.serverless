@@ -2,25 +2,35 @@
 # Base: runpod/worker-comfyui (公式)
 # Adds: ComfyUI-GGUF / ComfyUI-KJNodes / ComfyUI-VideoHelperSuite
 # Models / LoRAs are loaded from Network Volume mounted at /runpod-volume.
+#
+# カスタムノードは「直近で IN_PROGRESS 到達を確認したコミット (2026-04-28)」
+# に固定してビルド再現性を担保する。
+# 上流が破壊的変更を入れても視聴者の新規エンドポイントが動き続けるよう、
+# git checkout で SHA を明示する。
 
 ARG BASE_IMAGE=runpod/worker-comfyui:5.8.5-base
 FROM ${BASE_IMAGE}
+
+# Pinned commit hashes (検証日: 2026-04-28)
+ARG GGUF_COMMIT=6ea2651e7df66d7585f6ffee804b20e92fb38b8a
+ARG KJNODES_COMMIT=4e1458c2417db5cc7ae764929b00afad9892e10b
+ARG VHS_COMMIT=2984ec4c4b93292421888f38db74a5e8802a8ff8
 
 # 公式イメージは ComfyUI を /comfyui にインストールする
 WORKDIR /comfyui/custom_nodes
 
 # ComfyUI-GGUF (Wan2.1 GGUF モデル読み込み)
-RUN git clone --depth=1 https://github.com/city96/ComfyUI-GGUF.git \
- && (cd ComfyUI-GGUF && pip install --no-cache-dir -r requirements.txt) \
+RUN git clone https://github.com/city96/ComfyUI-GGUF.git \
+ && (cd ComfyUI-GGUF && git checkout "${GGUF_COMMIT}" && pip install --no-cache-dir -r requirements.txt) \
  && pip install --no-cache-dir gguf
 
 # ComfyUI-KJNodes (SageAttention / TeaCache / WanVideoTeaCacheKJ など)
-RUN git clone --depth=1 https://github.com/kijai/ComfyUI-KJNodes.git \
- && (cd ComfyUI-KJNodes && pip install --no-cache-dir -r requirements.txt) || true
+RUN git clone https://github.com/kijai/ComfyUI-KJNodes.git \
+ && (cd ComfyUI-KJNodes && git checkout "${KJNODES_COMMIT}" && pip install --no-cache-dir -r requirements.txt) || true
 
 # ComfyUI-VideoHelperSuite (CreateVideo / SaveVideo)
-RUN git clone --depth=1 https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite.git \
- && (cd ComfyUI-VideoHelperSuite && pip install --no-cache-dir -r requirements.txt) || true
+RUN git clone https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite.git \
+ && (cd ComfyUI-VideoHelperSuite && git checkout "${VHS_COMMIT}" && pip install --no-cache-dir -r requirements.txt) || true
 
 # SageAttention (4090 は pip 1 発で入る、5090 用は別途ベース変更が必要)
 RUN pip install --no-cache-dir sageattention || true
