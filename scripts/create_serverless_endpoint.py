@@ -34,6 +34,9 @@ import sys
 import urllib.error
 import urllib.request
 
+from dotenv import load_dotenv
+load_dotenv(override=True)
+
 REST_BASE = "https://rest.runpod.io/v1"
 
 
@@ -119,8 +122,11 @@ def create_endpoint(api_key, name, template_id, volume_id, datacenter, gpu_type_
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--image", required=True, help="Docker image 名（タグ込み）")
-    parser.add_argument("--volume-id", default="c1dbeweh5j")
+    parser.add_argument("--image",
+                        default=os.environ.get("SERVERLESS_IMAGE", ""),
+                        help="Docker image 名（未指定なら環境変数 SERVERLESS_IMAGE を使う）")
+    parser.add_argument("--volume-id",
+                        default=os.environ.get("RUNPOD_VOLUME_ID", "c1dbeweh5j"))
     parser.add_argument("--datacenter", default="EU-RO-1")
     parser.add_argument("--kind", choices=["flux", "i2v", "both"], default="both")
     parser.add_argument("--gpu-ids",
@@ -133,6 +139,9 @@ def main():
     parser.add_argument("--registry-auth-id", default="",
                         help="GHCR が private の場合 RunPod に登録した Container Registry Auth の ID")
     args = parser.parse_args()
+
+    if not args.image:
+        sys.exit("❌ --image または環境変数 SERVERLESS_IMAGE を指定してください")
 
     api_key = get_api_key()
 

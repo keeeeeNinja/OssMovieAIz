@@ -33,6 +33,9 @@ import urllib.request
 import urllib.error
 import shutil
 
+from dotenv import load_dotenv
+load_dotenv(override=True)
+
 API_BASE = "https://api.runpod.ai/v2"
 WORKFLOWS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "serverless_workflows")
 THEME_PREFIX_RE = re.compile(r"^T(\d+)_")

@@ -27,6 +27,13 @@ import json
 import os
 import sys
 
+from dotenv import load_dotenv
+load_dotenv(override=True)
+
+# AWS_* 残骸が残っていると boto3 がそちらを優先する事故があるので除去
+for _k in ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN"):
+    os.environ.pop(_k, None)
+
 try:
     import boto3
     from botocore.config import Config
@@ -51,8 +58,7 @@ def get_s3_client():
         endpoint_url=endpoint,
         aws_access_key_id=access_key,
         aws_secret_access_key=secret_key,
-        region_name=region,
-        config=Config(signature_version="s3v4"),
+        region_name=region,  # RunPod は大文字 (EU-RO-1) を使う
     )
 
 
