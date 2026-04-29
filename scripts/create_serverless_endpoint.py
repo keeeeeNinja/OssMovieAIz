@@ -21,9 +21,9 @@ Usage:
   # Flux だけ
   python3 scripts/create_serverless_endpoint.py --kind flux ...
 
-  # 作成後、表示される Endpoint ID を ~/.zshrc に追加:
-  #   export RUNPOD_ENDPOINT_FLUX=...
-  #   export RUNPOD_ENDPOINT_I2V=...
+  # 作成後、表示される Endpoint ID を ~/.config/ossmovie/.env に追記:
+  #   RUNPOD_ENDPOINT_FLUX=...
+  #   RUNPOD_ENDPOINT_I2V=...
 """
 
 import argparse
@@ -35,7 +35,17 @@ import urllib.error
 import urllib.request
 
 from dotenv import load_dotenv
-load_dotenv(override=True)
+from pathlib import Path
+
+# .env 読み込み優先度: プロジェクトルート → ~/.config/ossmovie/.env → 既存環境変数
+_env_candidates = [
+    Path.cwd() / ".env",
+    Path.home() / ".config" / "ossmovie" / ".env",
+]
+for _path in _env_candidates:
+    if _path.exists():
+        load_dotenv(_path, override=True)
+        break
 
 REST_BASE = "https://rest.runpod.io/v1"
 
@@ -167,11 +177,11 @@ def main():
     print("\n=== 完了 ===")
     for name, eid in results.items():
         print(f"  {name}: {eid}")
-    print("\n~/.zshrc に以下を追加してください:")
+    print("\n~/.config/ossmovie/.env に以下を追記してください:")
     if "ossmovie-flux" in results:
-        print(f'  export RUNPOD_ENDPOINT_FLUX="{results["ossmovie-flux"]}"')
+        print(f'  RUNPOD_ENDPOINT_FLUX={results["ossmovie-flux"]}')
     if "ossmovie-i2v" in results:
-        print(f'  export RUNPOD_ENDPOINT_I2V="{results["ossmovie-i2v"]}"')
+        print(f'  RUNPOD_ENDPOINT_I2V={results["ossmovie-i2v"]}')
 
 
 if __name__ == "__main__":

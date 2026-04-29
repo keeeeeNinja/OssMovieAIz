@@ -35,7 +35,17 @@ import urllib.error
 import shutil
 
 from dotenv import load_dotenv
-load_dotenv(override=True)
+from pathlib import Path
+
+# .env 読み込み優先度: プロジェクトルート → ~/.config/ossmovie/.env → 既存環境変数
+_env_candidates = [
+    Path.cwd() / ".env",
+    Path.home() / ".config" / "ossmovie" / ".env",
+]
+for _path in _env_candidates:
+    if _path.exists():
+        load_dotenv(_path, override=True)
+        break
 
 API_BASE = "https://api.runpod.ai/v2"
 WORKFLOWS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "serverless_workflows")

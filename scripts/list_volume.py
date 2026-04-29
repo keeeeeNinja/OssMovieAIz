@@ -5,7 +5,17 @@ import os
 import sys
 
 from dotenv import load_dotenv
-load_dotenv(override=True)
+from pathlib import Path
+
+# .env 読み込み優先度: プロジェクトルート → ~/.config/ossmovie/.env → 既存環境変数
+_env_candidates = [
+    Path.cwd() / ".env",
+    Path.home() / ".config" / "ossmovie" / ".env",
+]
+for _path in _env_candidates:
+    if _path.exists():
+        load_dotenv(_path, override=True)
+        break
 
 # AWS_* 残骸が残っていると boto3 がそちらを優先する事故があるので除去
 for _k in ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN"):

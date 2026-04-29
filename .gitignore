@@ -7,6 +7,24 @@ out/
 Fluxトークン.md
 Archive/
 vendor/
+# 秘密情報（保険）
 .env
+.env.*
+!.env.example
+*.env
+
 __pycache__/
 *.pyc
+
+# GitHub recovery codes / 認証情報（絶対 commit しない）
+github-recovery-codes.txt
+*-recovery-codes.txt
+
+# 大容量アセット（git LFS 未導入のため除外）
+LoRA/
+作業中動画/.locks_serverless_*/
+作業中動画/job_map_*.json
+
+# 配布用一時バンドル（gh release 経由で配布想定）
+serverless_bundle/
+serverless_bundle.zip
