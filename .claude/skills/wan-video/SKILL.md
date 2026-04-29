@@ -1,12 +1,12 @@
 ---
 name: wan-video
-description: 作業中動画フォルダの画像を分析してWan 2.1 I2V（ComfyUI on RunPod）用のプロンプトを作成し、SSH経由でRunPodに送信して動画生成まで実行する。Wanで動画作って、Wan用プロンプト、ComfyUIで生成、RunPodで動画生成して、という場面で必ず使う。
-allowed-tools: Agent, Bash, Read, Write
+description: 作業中動画フォルダの画像を分析してWan 2.1 I2V（RunPod Serverless）用のプロンプトを作成し、Serverless エンドポイントに送信して動画生成まで実行する。Wanで動画作って、Wan用プロンプト、Serverlessで生成、Wan I2Vで動画生成して、という場面で必ず使う。
+allowed-tools: Bash, Read, Write
 ---
 
-## Wan 2.1 I2V 動画生成（ComfyUI on RunPod）
+## Wan 2.1 I2V 動画生成（RunPod Serverless）
 
-`作業中動画/` 内の画像を分析し、Wan 2.1 Image-to-Videoに最適な英語プロンプトを生成してRunPodのComfyUI APIで動画生成まで実行する。
+`作業中動画/` 内の画像を分析し、Wan 2.1 Image-to-Videoに最適な英語プロンプトを生成して、`scripts/serverless_request.py --endpoint i2v` で生成まで実行する。Pod 起動・SSH 接続・並列 Pod 運用は不要（Serverless ワーカーが自動でスケールする）。
 
 ---
 
@@ -28,15 +28,13 @@ allowed-tools: Agent, Bash, Read, Write
 
 ---
 
-### Step 0: RunPod接続情報を確認する
+### Step 0: Serverless 疎通を確認する
 
-1. `ssh.md` を読んでSSH接続情報を確認する（`/runpod-start` スキルが起動時に更新する）
-2. SSH情報がなければユーザーに「RunPodのPodは起動していますか？ SSH接続先（IP・ポート）を教えてください」と聞く
-3. 接続情報を受け取ったらStep 8-1のPod受け入れフローでSSH疎通・ComfyUI起動を確認する
+1. `.env` の `RUNPOD_ENDPOINT_I2V` と `~/.zshrc` の `RUNPOD_API_KEY` がセットされていること（`serverless_request.py` が起動時に必須化する）
+2. 必要なら `https://api.runpod.ai/v2/<RUNPOD_ENDPOINT_I2V>/health` を叩いて応答を確認する（無料・課金無し）
+3. ワーカーは投入時に自動で立ち上がる（FlashBoot 効果でコールドスタート約 6 秒）
 
-**この時点では1台目のPodのみ。** 2台目以降はStep 8でユーザーから追加される。
-
-**以降、`SSH_HOST`=`root@[IP] -p [PORT] -i ~/.ssh/id_ed25519` と表記する。**
+Pod の起動・SSH 疎通確認・並列 Pod の追加投入はすべて不要。
 
 ---
 
@@ -373,180 +371,108 @@ blurry, distorted, low quality, shaky, deformed hands, extra fingers, watermark,
 
 ---
 
-### Step 8: 生成実行（逐次追加型・並列生成）
+### Step 8: 生成実行（Serverless 一括投入）
 
-ユーザーから「生成して」の指示を受けたら、以下のフローで並列生成を行う。
+ユーザーから「生成して」の指示を受けたら、以下の単一コマンドで全シーンを Serverless に投入する。Serverless ワーカーが自動で複数立ち上がって並列処理する（Pod 起動・SSH 接続・Agent 起動は一切不要）。
 
-#### 8-0. 全体の流れ
+#### 8-1. プロンプト JSON を作成する
 
+`scripts/wan_i2v_prompts.json` に以下の形式で書き出す（Step 6 の `プロンプト.md` の内容をマシン可読化したもの）:
+
+```json
+[
+  {
+    "id": "T1_C01",
+    "prompt": "[英語プロンプト]",
+    "negative": "blurry, distorted, low quality, shaky, deformed hands, extra fingers, watermark, text overlay",
+    "image": "flux_T1_C01.png"
+  },
+  { "id": "T1_C02", "prompt": "...", "image": "flux_T1_C02.png" }
+]
 ```
-オーケストレーター（メイン）
-├── ユーザーからPod 1のSSH情報を受け取る
-├── Pod 1: ComfyUI起動確認 → 画像アップロード → エージェント起動（未割当シーンを割り当て）
-├── ユーザーからPod 2のSSH情報を受け取る（Pod 1生成中でもOK）
-├── Pod 2: ComfyUI起動確認 → 画像アップロード → エージェント起動（未割当シーンを割り当て）
-├── ...（Podが追加されるたびに繰り返し）
-└── 全エージェント完了 → 結果を集約して報告
-```
 
-**ユーザーの責務:** Podの起動 + setup_comfyui.sh実行 + SSH情報をメインに渡す
-**オーケストレーターの責務:** 画像アップロード、シーン割り当て、エージェント起動、結果集約
-**エージェントの責務:** ワークフロー投入 → ポーリング → ダウンロード → 結果返却
+- `id` は Step 6 の `flux_prompts.json` と一致させる（`T{N}_C{NN}`）
+- `image` は `--image-file` で base64 注入する Flux PNG のファイル名（オプション。指定しない場合 `serverless_request.py` が `flux_<id>.png` を仮定する）
+- `negative` は省略可。省略時はスクリプト側のデフォルト
 
-#### 8-1. Pod受け入れフロー（ユーザーがSSH情報を渡すたびに実行）
+#### 8-2. 実行コマンド
 
-1. SSH疎通確認:
+`run_in_background: true` で投入する。各シーンの Flux PNG を `--image-file` で順番にアタッチするため、シーンごとにループする実装になっている（スクリプト本体が `--image-file` 単一指定のため、複数シーン × 各画像注入には for ループでスクリプトを呼ぶ）。
+
 ```bash
-ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 root@[IP] -p [PORT] -i ~/.ssh/id_ed25519 "echo connected && nvidia-smi | head -3"
+# 全シーン一括（image-file 注入はスクリプト側のループ前提）
+python3 scripts/serverless_request.py \
+  --endpoint i2v \
+  --prompts scripts/wan_i2v_prompts.json \
+  --output-root 作業中動画 \
+  --width 480 --height 832 \
+  --steps 30 \
+  --save-locally
 ```
 
-2. ComfyUI起動確認:
+各 prompt entry の `image` キーが Flux PNG ファイル名に対応する。`serverless_request.py` の `build_i2v_workflow` がワークフローテンプレに `[IMAGE_NAME]` を埋め込む。**対応する PNG をワーカー側に届けるため、シーンごとに `--image-file` を渡してスクリプトを呼び出すループ**にするのが現状の最も確実な方法:
+
 ```bash
-ssh -o StrictHostKeyChecking=no SSH_HOST "curl -s -o /dev/null -w '%{http_code}' http://localhost:8188/"
-```
-`200`でなければ起動:
-```bash
-ssh -o StrictHostKeyChecking=no SSH_HOST "cd /workspace/ComfyUI && nohup python3 main.py --listen 0.0.0.0 --port 8188 --use-sage-attention > /workspace/comfyui.log 2>&1 & echo starting"
-```
-30秒後に再確認。起動しなければ `comfyui.log` を確認してユーザーに報告。
-
-3. 参照画像をアップロード（このPodで生成するシーンの画像をまとめてscp）:
-```bash
-scp -o StrictHostKeyChecking=no -P [PORT] -i ~/.ssh/id_ed25519 \
-  "/Users/keeee/Desktop/Dev/OssMovieAIz/作業中動画/[ファイル名]" \
-  root@[IP]:/workspace/ComfyUI/input/[ファイル名]
-```
-
-4. 未割当シーンからこのPodに割り当てるシーンを決定し、エージェントを起動（`run_in_background: true`）
-
-#### 8-2. エージェント起動（複数Pod時のみ）
-
-**Podが1台だけの場合はエージェントを使わず、オーケストレーターが直接ワークフロー投入→ポーリング→ダウンロードを実行する。** シンプルなケースにエージェントのオーバーヘッドは不要。
-
-**Podが2台以上の場合**、Agentツールで生成エージェントを起動する。各エージェントには以下の情報を渡す:
-
-- **SSH接続情報**（IP, PORT）
-- **割り当てシーンのリスト**（シーン番号、プロンプト、ネガティブプロンプト、参照画像ファイル名、出力プレフィックス）
-- **ワークフローJSON**（下記テンプレート）
-
-```
-Agent(
-  description="Pod N で Scene X,Y 生成",
-  prompt="以下のシーンをComfyUI APIで生成し、完了したらローカルにダウンロードしてください。
-    SSH: root@[IP] -p [PORT] -i ~/.ssh/id_ed25519
-    シーン情報: [各シーンの詳細]
-    ワークフローJSON: [テンプレート]
-    手順: ワークフロー投入 → ポーリング（60秒間隔） → scp でダウンロード
-    ダウンロード先: /Users/keeee/Desktop/Dev/OssMovieAIz/作業中動画/
-    ファイル名規則: scene[番号]_[コンセプト名]_wan21.mp4
-    エラー時: エラー内容を返してください。自分でリトライしないでください。",
-  run_in_background=true
-)
+# シーンごとにループして --image-file で base64 注入
+for scene in T1_C01 T1_C02 T2_C01; do
+  THEME=$(echo $scene | sed 's/_.*//' | sed 's/T/theme/')
+  python3 scripts/serverless_request.py \
+    --endpoint i2v \
+    --prompts scripts/wan_i2v_prompts.json \
+    --scenes $scene \
+    --image-file "作業中動画/${THEME}/flux_${scene}.png" \
+    --output-root 作業中動画 \
+    --width 480 --height 832 \
+    --steps 30 \
+    --save-locally
+done
 ```
 
-**1Podに複数シーンを割り当てる場合は順番に生成する**（ComfyUIは1GPUなので並列実行できない）。
+- `--scenes` で個別 id を 1 件ずつ投入
+- `--image-file` で対応する Flux PNG を base64 注入（ワーカー側 ComfyUI の `input/` に自動アップロードされる）
+- `--save-locally` で完了レスポンスの base64 MP4 を `作業中動画/theme{N}/scene_<id>_wan21_xxxx.mp4` に保存
+- ロックは `作業中動画/.locks_serverless_i2v/` で同 id の二重投入を防ぐ
 
-#### 8-3. シーン割り当て戦略
+#### 8-3. ベンチマーク（参考値）
 
-- 未割当シーンを先頭から順にPodに割り当てる
-- 1Podあたりの割り当て数はシーン総数とPod数で均等割り（余りは最初のPodに）
-- 後からPodが追加された場合、まだ未割当のシーンがあればそのPodに割り当てる
-- 全シーン割り当て済みなら「全シーン割り当て済みです」と伝える
+| 解像度 | ステップ | 1クリップ生成時間 | コールドスタート |
+|-------|--------|------------------|----------------|
+| 480×832 | 30 | 約 7.5 分 | 約 6 秒（FlashBoot） |
 
-#### 8-4. エージェント完了時の処理
+複数シーンを背景投入すると Serverless 側が複数ワーカーを立ち上げて並列処理する。所要時間は「最も遅いシーン」≒ ループ全体ではなく Serverless キューの進捗で決まる。
 
-- エージェントが成功を返したら、ダウンロード済みファイルの存在を確認
-- エージェントがエラーを返したら、エラー内容を確認し、原因を判断して対処:
-  - OOM → ユーザーに報告（Pod再起動が必要な場合あり）
-  - Pod切断 → ユーザーに報告して新しいPodのSSH情報を待つ
-  - ワークフローエラー → ノード名を確認して修正し、同じエージェントを `resume` で再実行
+#### 8-4. エラー時の処理
+
+- `FAILED` / `TIMED_OUT` を返したシーン → `job_map_i2v.json` の該当エントリを確認し、必要なら `--scenes <id>` で個別再投入
+- 全件失敗 → エンドポイントヘルス（`/health`）を確認、worker が `unhealthy` になっていないか確認
+- 同じ id を再投入したい場合は `作業中動画/.locks_serverless_i2v/<id>.lock` を削除してから
 
 ---
 
-### Step 9: ワークフローJSON
+### Step 9: 結果を集約して報告する
 
-テンプレートは `.claude/skills/wan-video/workflow_template.json` を参照。以下のプレースホルダーを各シーンの値に置き換えて使う:
-
-| プレースホルダー | 内容 |
-|---------------|------|
-| `[PROMPT]` | 英語プロンプト |
-| `[NEGATIVE]` | ネガティブプロンプト |
-| `[IMAGE_NAME]` | 参照画像ファイル名 |
-| `[OUTPUT_PREFIX]` | 出力ファイル名のプレフィックス |
-| `[SEED_VALUE]` | ランダムseed（`random.randint(1, 2**32)`） |
-| `[WIDTH]`/`[HEIGHT]` | 解像度（480×832 or 720×1280） |
-| `[COEFFICIENTS]` | TeaCache係数（`i2v_480` or `i2v_720`） |
-
-**送信方法:** JSONをPythonで読み込み、プレースホルダーを置換して `http://localhost:8188/prompt` にPOSTする。
-
-**APIエラー時:** `http://localhost:8188/object_info` でノード一覧を確認し、ノード名が変わっていれば修正して再送信。
-
----
-
-### Step 10: ポーリング（エージェント内で実行）
-
-エージェント内でワークフロー送信後、ComfyUI APIでキュー状況を確認する。
-
-```bash
-ssh -o StrictHostKeyChecking=no SSH_HOST 'python3 -c "
-import json, urllib.request
-queue = json.loads(urllib.request.urlopen(\"http://localhost:8188/queue\").read())
-print(\"Running:\", len(queue.get(\"queue_running\", [])))
-print(\"Pending:\", len(queue.get(\"queue_pending\", [])))
-" && nvidia-smi | grep MiB'
-```
-
-- Running: 0 かつ Pending: 0 → 生成完了。ダウンロードへ。
-- Running: 1 以上 → 生成中。60秒待ってから再確認。
-- **Wan 2.1 I2V 14B (GGUF Q5_K_M) の生成時間目安: RTX 4090で約6分/本（SageAttention + TeaCache + CFG=3.0）**
-
-生成中はVRAM使用量も確認し、OOMが疑われる場合は `comfyui.log` を確認する。
-
-最大15分待っても完了しない場合は `comfyui.log` の末尾を表示してエラーとして返す。
-
----
-
-### Step 11: ダウンロード（エージェント内で実行）
-
-```bash
-# 出力ファイルを確認
-ssh -o StrictHostKeyChecking=no SSH_HOST "ls -lh /workspace/ComfyUI/output/[OUTPUT_PREFIX]*"
-
-# ダウンロード
-scp -o StrictHostKeyChecking=no -P [PORT] -i ~/.ssh/id_ed25519 \
-  "root@[IP]:/workspace/ComfyUI/output/[OUTPUT_PREFIX]_00001.mp4" \
-  "/Users/keeee/Desktop/Dev/OssMovieAIz/作業中動画/[ファイル名].mp4"
-```
-
-**ファイル名規則:** `scene[番号]_[コンセプト名]_wan21.mp4`
-
----
-
-### Step 12: 結果を集約して報告する
-
-全エージェント完了後、オーケストレーターが以下をまとめてユーザーに報告する:
+全シーン完了後、ユーザーに以下をまとめて報告する:
 
 ```
 ✅ Wan 2.1 I2V 動画生成完了
 
-| シーン | ファイル | Pod | 解像度 | seed |
-|-------|---------|-----|--------|------|
-| Scene 1 | scene1_xxx_wan21.mp4 | Pod 1 | 480×832 | 12345 |
-| Scene 2 | scene2_xxx_wan21.mp4 | Pod 2 | 480×832 | 67890 |
-| Scene 3 | scene3_xxx_wan21.mp4 | Pod 3 | 480×832 | 11111 |
+| シーン | ファイル | 解像度 | exec time |
+|-------|---------|--------|----------|
+| Scene 1 | scene_T1_C01_wan21_xxxx.mp4 | 480×832 | 7.4 min |
+| Scene 2 | scene_T1_C02_wan21_xxxx.mp4 | 480×832 | 7.6 min |
 
-保存先: 作業中動画/
-生成時間: 約X分（並列）
+保存先: 作業中動画/theme{N}/
+job_map: 作業中動画/job_map_i2v.json
 
-気に入らないシーンがあればseedを変えて再生成できます。
+気に入らないシーンは `--seed` を変えて `--scenes <id>` で個別再生成できます。
 ```
 
 エラーがあったシーンは別途報告し、再生成するか確認する。
 
 ---
 
-### 注意点（本文に記載のないもののみ）
+### 注意点
 
-- **コスト**: RunPod RTX 4090 = 約$0.69/時間。480p+TeaCache+SageAttentionで1クリップ約6分。
-- **mp4出力**: VHS_VideoCombineでh264 mp4を直接出力。VHSが使えない場合は `ffmpeg -i input.webp -c:v libx264 -pix_fmt yuv420p output.mp4` で変換。
-- **TeaCacheの注意**: プロンプトを変更して再生成する際は、ComfyUIを`kill -9 <PID>`で完全再起動すること。キャッシュ不一致でノイズまみれになる。
+- **コスト**: RunPod Serverless RTX 4090 = 約 $0.69/時間 × `executionTime`。1 クリップ約 7.5 分なら $0.086/clip。worker が立ち上がっている時間だけ課金（FlashBoot 6 秒ぶんはほぼ無料）
+- **mp4出力**: ワーカー側 ComfyUI の VHS_VideoCombine が h264 mp4 を生成し、ハンドラが base64 化して返す。クライアント側で decode して保存
+- **再生成時のキャッシュ**: Serverless では各 job が独立したワーカーで動くため、TeaCache のキャッシュ不一致問題は発生しない。Pod 時代の「`kill -9` で完全再起動」は不要

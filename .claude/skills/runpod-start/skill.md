@@ -1,10 +1,12 @@
 ---
 name: runpod-start
-description: RunPod APIでPodを立ち上げ、SSH接続確認、setup_comfyui.sh実行、ssh.md更新まで一気通貫で行う。「Pod立ち上げて」「RunPod起動」「Pod起動して」という場面で必ず使う。「5090で」と言われたら5090モードで起動する。
+description: （非推奨・例外用途のみ）RunPod APIでPodを立ち上げ、SSH接続確認、setup_comfyui.sh実行、ssh.md更新まで一気通貫で行う。通常の動画制作フローは Serverless（`/flux-image` `/wan-video`）に移行済み。「Pod立ち上げて」「LoRA学習用に5090で起動」など Pod が必要な例外用途のみで使う。
 allowed-tools: Bash, Read, Write, Edit
 ---
 
-## RunPod Pod 起動スキル
+## RunPod Pod 起動スキル（非推奨）
+
+> ⚠️ **通常の動画制作フローでは使わない。** Flux/Wan I2V は RunPod Serverless（`scripts/serverless_request.py`）に移行済み。このスキルは LoRA 学習・新規モデルの動作確認・カスタムノード検証など、永続 Pod が必要な例外用途のみで起動する。
 
 RunPod GraphQL APIを使ってPodを作成し、ComfyUIが使える状態にするまで自動化する。
 

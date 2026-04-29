@@ -66,7 +66,7 @@ find /Users/keeee/Desktop/Dev/OssMovieAIz/作業中動画 -maxdepth 1 \( -name "
 2. **推奨秒数** — 演出理由とセットで
 3. **テロップ** — あり（文言の方向性）/ なし（理由）
 4. **カメラワーク** — 動きの種類と、なぜその動きが効果的かの理由
-5. **推奨エンジン** — 全カット Wan 2.1 I2V 固定（コスト・並列Pod運用優先）。Kling/Runway/PixVerseは選ばない。
+5. **推奨エンジン** — 全カット Wan 2.1 I2V (Serverless) 固定（コスト・運用シンプルさ優先）。Kling/Runway/PixVerseは選ばない。
 
 ---
 

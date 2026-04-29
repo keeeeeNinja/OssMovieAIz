@@ -1,6 +1,6 @@
 import React from "react";
 import { Composition } from "remotion";
-import { AdVideo, tutorialTotalFrames } from "./compositions/AdVideo";
+import { AdVideo, adVideoTotalFrames } from "./compositions/AdVideo";
 
 export const RemotionRoot: React.FC = () => {
   return (
@@ -8,10 +8,10 @@ export const RemotionRoot: React.FC = () => {
       <Composition
         id="AdVideo"
         component={AdVideo}
-        durationInFrames={tutorialTotalFrames}
+        durationInFrames={adVideoTotalFrames}
         fps={30}
-        width={1920}
-        height={1080}
+        width={1080}
+        height={1920}
       />
     </>
   );

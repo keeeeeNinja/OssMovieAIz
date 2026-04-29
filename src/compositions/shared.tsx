@@ -17,28 +17,6 @@ export const animC = (frame: number, text: string, startFrame = 3) => {
   });
 };
 
-export const telopBase = (fontSize: number, borderWidth: number): React.CSSProperties => ({
-  color: "#FF0000",
-  fontFamily: '"Noto Sans JP", "Hiragino Sans", sans-serif',
-  fontWeight: 900,
-  fontSize,
-  lineHeight: 1.2,
-  textAlign: "center",
-  WebkitTextStroke: `${borderWidth}px #FFFFFF`,
-  paintOrder: "stroke fill",
-  whiteSpace: "pre-line",
-});
-
-export const wrapperBase = (y: number): React.CSSProperties => ({
-  position: "absolute",
-  top: `${y * 100}%`,
-  left: 0,
-  right: 0,
-  transform: "translateY(-50%)",
-  display: "flex",
-  justifyContent: "center",
-});
-
 export type Clip = {
   // Step 5（bsベースライン実装時）はクリップ未生成なので空文字にする。
   // その場合は OffthreadVideo をレンダーせず黒背景＋テロップだけ表示する。

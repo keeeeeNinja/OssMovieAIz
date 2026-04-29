@@ -1,12 +1,12 @@
 ---
 name: flux-image
-description: bs分析＋plan-video構成案から各シーンのFlux用静止画プロンプトを生成し、RunPod上のComfyUIで一括生成する。「静止画作って」「プロンプト作って」「flux-image」「画像生成して」「Step 6」という場面で使う。
+description: bs分析＋plan-video構成案から各シーンのFlux用静止画プロンプトを生成し、RunPod Serverless で一括生成する。「静止画作って」「プロンプト作って」「flux-image」「画像生成して」「Step 6」という場面で使う。
 allowed-tools: Read, Write, Bash(*), Grep, Glob
 ---
 
 ## Flux静止画プロンプト生成＋一括生成スキル
 
-bs分析のカット構成とplan-videoの構成案をベースに、各シーンのFlux向けプロンプトを自動生成し、RunPod上のComfyUIで一括生成する。
+bs分析のカット構成とplan-videoの構成案をベースに、各シーンのFlux向けプロンプトを自動生成し、RunPod Serverless（`scripts/serverless_request.py --endpoint flux`）で一括生成する。
 
 ---
 
@@ -49,10 +49,7 @@ LoRAを使用する場合、以下の手順でトリガーワードを特定す�
    - 例: `flux_japanese_girl_v2.safetensors` → `ohwx woman`（Fluxの人物LoRAで最も一般的）
    - 例: `extra_long_lashes.safetensors` → LoRA名から推定
 2. 過去の `scripts/flux_prompts.json` にトリガーワードの使用例がある場合はそれを参考にする
-3. RunPod上でLoRAファイルが存在するか確認する（ssh.md参照）：
-   ```bash
-   ssh ... "ls /workspace/ComfyUI/models/loras/ | grep -i <LoRA名>"
-   ```
+3. LoRAファイルは Network Volume の `/workspace/ComfyUI/models/loras/` に配置されている前提（Serverless ワーカーがマウントして参照する）。存在確認は `LoRA/` ディレクトリのローカルコピーを Glob で見るか、過去 `flux_prompts.json` の使用実績で代用する
 
 決定したトリガーワードは各プロンプトの先頭に付与する。
 
@@ -181,63 +178,36 @@ LoRAを使用する場合、以下の手順でトリガーワードを特定す�
 
 ---
 
-### Step 5: 画像を生成する
+### Step 5: 画像を生成する（Serverless）
 
-ユーザーの承認後、生成する。**テーマ数によってフローが分岐する**。
+ユーザーの承認後、`scripts/serverless_request.py --endpoint flux` を `run_in_background: true` で実行する。Pod 起動・SSH 接続は不要。
 
-#### 5-1. SSH接続情報を取得する
+#### 5-1. 前提
 
-`ssh.md` を読んでPod 1 のIP・ポートを取得する。マルチテーマ時は並列Podの情報も揃える。
+- `~/.zshrc` に `RUNPOD_API_KEY` が設定済み（環境変数として読まれる）
+- `.env` に `RUNPOD_ENDPOINT_FLUX` が設定済み（`load_dotenv` で自動ロード）
+- LoRA を使う場合、Network Volume（Serverless ワーカーが自動マウント）の `models/loras/` に該当ファイルが存在すること
 
-#### 5-2a. 単一テーマの場合（Pod 1 のみ）
+#### 5-2. 実行コマンド
 
 ```bash
-python3 scripts/generate_flux_images.py \
-  --host <POD1_IP> \
-  --port <POD1_PORT> \
+python3 scripts/serverless_request.py \
+  --endpoint flux \
   --prompts scripts/flux_prompts.json \
+  --output-root 作業中動画 \
   --lora <LoRAファイル名> \
-  --lora-strength 0.8 \
-  --steps 20 \
-  --width 768 \
-  --height 1024 \
-  --output-dir 作業中動画 \
-  --copy-to-input
+  --lora-strength 0.85 \
+  --width 768 --height 1280 \
+  --steps 25 \
+  --save-locally
 ```
 
-- LoRA不使用の場合は `--lora` を省略
-- `--copy-to-input` で同一PodでWan I2Vを続けて回せるようにする
-
-#### 5-2b. マルチテーマの場合（プール方式・ゼロアイドル）
-
-**方針: 全Podに全シーン（テーマ混在）を渡し、ロックで未着手を取り合う**。テーマ境界を無視するので、空きPodは即座に別テーマの未着手カットを拾いに行く。
-
-プロンプトJSONは1ファイル（`scripts/flux_prompts.json`）に全テーマの id を混在させる:
-
-```json
-[
-  { "id": "T1_C01", "prompt": "..." },
-  { "id": "T2_C01", "prompt": "..." },
-  { "id": "T3_C01", "prompt": "..." }
-]
-```
-
-**`--output-root 作業中動画`** を指定すると、各スクリプトはシーンIDの `T{N}_` プレフィックスから `作業中動画/theme{N}/flux_T{N}_C{NN}.png` へ自動ルーティングする。ロックディレクトリは `作業中動画/.locks_flux/` で全Pod共通。
-
-- **Pod 1（Volume付き）**: 全シーンを渡してプール実行
-
-  ```bash
-  python3 scripts/generate_flux_images.py \
-    --host <POD1_IP> --port <POD1_PORT> \
-    --prompts scripts/flux_prompts.json \
-    --output-root 作業中動画 \
-    --lora flux_japanese_girl_v2.safetensors \
-    --copy-to-input
-  ```
-
-- **並列Pod（Volume なし）はWan専用**。Flux画像生成はPod 1（Network Volume付き）のみで実行する。並列PodにはFlux/LoRAはインストールされない。Pod 1で全シーンのFlux画像を生成し、ローカル経由でWan専用Podに共有する
-
-- **生成結果は** Pod 1 がローカルの `作業中動画/theme{N}/flux_*.png` に自動振り分けでダウンロードする。全シーン完了後にStep 5-3（クオリティゲート）に進む
+- LoRA 不使用の場合は `--lora` 省略（テンプレが `flux.json`、付与時は `flux_lora.json` に切り替わる）
+- `Ayano_Chan` 系 LoRA は自動で strength=0.85 になる（スクリプト内ロジック）
+- `--save-locally` で完了 job の `output.images[*].data` を base64 デコードして `作業中動画/theme{N}/` に保存する
+- `--output-root 作業中動画` を指定すると id の `T{N}_` プレフィックスから theme フォルダへ自動振り分け
+- マルチテーマも単一テーマも同じコマンド。プロンプト JSON に `T1_C01` / `T2_C01` などを混在させれば一括投入される
+- 並列実行は Serverless 側のワーカープールが裁く。ローカル側のロック（`作業中動画/.locks_serverless_flux/`）は同じ id を二重投入しないためだけのもの
 
 #### 5-3. 生成結果を確認する（クオリティゲート）
 
@@ -270,6 +240,6 @@ python3 scripts/generate_flux_images.py \
 
 - **プロンプトは短く具体的に**。長い説明文よりカンマ区切りのキーワードが効く
 - **Fluxは77トークン制限がある**。品質タグを入れても100語を超えないようにする
-- **同じLoRAでも強度で出力が変わる**。デフォルト0.8で、必要に応じて調整
-- **人物カットと商品カットでLoRA使用を分ける**。generate_flux_images.pyは`C08`等の特定IDでLoRAなしにする機能があるが、汎用的にはプロンプトJSONにフラグを入れることも検討
-- **既存ファイルがある場合は自動スキップされる**。再生成したい場合は該当ファイルを削除してから実行
+- **同じLoRAでも強度で出力が変わる**。デフォルト0.85で、必要に応じて調整
+- **人物カットと商品カットでLoRA使用を分けたい場合は、別の `flux_prompts.json` を 2 系統に分けて 2 回実行する**（Serverless ルートでは 1 回の呼び出しで LoRA on/off 切り替えはできない）
+- **再生成したい場合は `作業中動画/.locks_serverless_flux/<id>.lock` を削除してから実行する**（同 id の二重投入はロックでブロックされる）
