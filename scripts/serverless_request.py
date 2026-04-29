@@ -23,6 +23,7 @@ Usage:
 """
 
 import argparse
+import base64
 import fcntl
 import json
 import os
@@ -154,10 +155,55 @@ def http_get_json(url, headers):
         raise RuntimeError(f"HTTP {e.code} {e.reason}: {body}")
 
 
-def submit_job(endpoint_id, api_key, workflow):
+def encode_image_file(path):
+    """ローカル画像を base64 (Data URI 不要、純粋な base64 文字列) でエンコード"""
+    with open(path, "rb") as f:
+        return base64.b64encode(f.read()).decode("ascii")
+
+
+def submit_job(endpoint_id, api_key, workflow, images=None):
+    """images: [{"name": "xxx.png", "image": "<base64>"}] 形式のリスト。
+    公式 worker-comfyui は input.images を ComfyUI input/ にアップロードしてから
+    ワークフローを実行する。LoadImage の image="xxx.png" がそのまま参照される。"""
     url = f"{API_BASE}/{endpoint_id}/run"
-    payload = {"input": {"workflow": workflow}}
+    inp = {"workflow": workflow}
+    if images:
+        inp["images"] = images
+    payload = {"input": inp}
     return http_post_json(url, payload, {"Authorization": f"Bearer {api_key}"})
+
+
+def save_outputs(result, dest_dir, scene_id):
+    """job 完了結果から base64 出力を decode してローカル保存。
+    公式 worker-comfyui のレスポンス形式に対応:
+      output.images: [{"filename":"xxx.png","type":"image/png","data":"<b64>"}]
+      output.message が文字列の場合は無視
+    返り値: 保存したパスのリスト"""
+    os.makedirs(dest_dir, exist_ok=True)
+    out = result.get("output") or {}
+    saved = []
+    # images キー (Flux など)
+    for item in out.get("images", []) or []:
+        data = item.get("data") or item.get("image") or ""
+        filename = item.get("filename") or f"{scene_id}.png"
+        if not data:
+            continue
+        local = os.path.join(dest_dir, filename)
+        with open(local, "wb") as f:
+            f.write(base64.b64decode(data))
+        saved.append(local)
+    # videos / files キー (Wan I2V 用、handler によっては files キー)
+    for k in ("videos", "files"):
+        for item in out.get(k, []) or []:
+            data = item.get("data") or ""
+            filename = item.get("filename") or f"{scene_id}.bin"
+            if not data:
+                continue
+            local = os.path.join(dest_dir, filename)
+            with open(local, "wb") as f:
+                f.write(base64.b64decode(data))
+            saved.append(local)
+    return saved
 
 
 def poll_job(endpoint_id, api_key, job_id, timeout=900):
@@ -199,7 +245,8 @@ def main():
     parser.add_argument("--endpoint-id", default="",
                         help="未指定なら環境変数 RUNPOD_ENDPOINT_FLUX / RUNPOD_ENDPOINT_I2V を参照")
     parser.add_argument("--api-key", default=os.environ.get("RUNPOD_API_KEY", ""))
-    parser.add_argument("--prompts", required=True)
+    parser.add_argument("--prompts", required=False, default="",
+                        help="プロンプト JSON。--prompt-text 単独使用時は不要")
     parser.add_argument("--output-root", default="作業中動画")
     parser.add_argument("--scenes", default="")
     parser.add_argument("--lora", default="")
@@ -210,6 +257,14 @@ def main():
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--timeout", type=int, default=900)
     parser.add_argument("--clean-locks", action="store_true")
+    parser.add_argument("--prompt-text", default="",
+                        help="単発テスト用: id=TEST のシーンを 1 件作って実行")
+    parser.add_argument("--negative-text", default="blurry, low quality, deformed, bad anatomy",
+                        help="I2V のネガティブプロンプト (--prompt-text 単独使用時)")
+    parser.add_argument("--image-file", default="",
+                        help="I2V 用入力画像のローカルパス。base64 化して input.images で注入")
+    parser.add_argument("--save-locally", action="store_true",
+                        help="job 完了後、base64 出力を decode して output-root に保存")
     args = parser.parse_args()
 
     if not args.endpoint_id:
@@ -225,13 +280,28 @@ def main():
             args.lora_strength = 0.85
             print("  (Ayano_Chan LoRA 検出 → strength=0.85)")
 
-    with open(args.prompts) as f:
-        prompts = json.load(f)
-    if args.scenes:
-        keep = set(s.strip() for s in args.scenes.split(","))
-        prompts = [p for p in prompts if p.get("id") in keep]
-        if not prompts:
-            sys.exit(f"⚠️  --scenes に該当するプロンプトがありません")
+    if args.prompt_text and not args.prompts:
+        # 単発テスト: 仮想シーン TEST を 1 件作る
+        test_item = {"id": "TEST", "prompt": args.prompt_text}
+        if args.endpoint == "i2v":
+            test_item["negative"] = args.negative_text
+            if args.image_file:
+                test_item["image"] = os.path.basename(args.image_file)
+        prompts = [test_item]
+    else:
+        if not args.prompts:
+            sys.exit("❌ --prompts または --prompt-text を指定してください")
+        with open(args.prompts) as f:
+            prompts = json.load(f)
+        if args.scenes:
+            keep = set(s.strip() for s in args.scenes.split(","))
+            prompts = [p for p in prompts if p.get("id") in keep]
+            if not prompts:
+                sys.exit(f"⚠️  --scenes に該当するプロンプトがありません")
+        # --prompt-text が指定されたら全シーンのプロンプトを上書き
+        if args.prompt_text:
+            for p in prompts:
+                p["prompt"] = args.prompt_text
 
     os.makedirs(args.output_root, exist_ok=True)
     lock_dir = os.path.join(args.output_root, f"{LOCK_DIR_BASE}_{args.endpoint}")
@@ -253,8 +323,19 @@ def main():
             continue
         try:
             wf = builder(item, args)
+            # --image-file が指定されていれば input.images に注入
+            images_payload = None
+            if args.image_file:
+                if not os.path.isfile(args.image_file):
+                    print(f"  ❌ --image-file が存在しません: {args.image_file}")
+                    failed += 1
+                    continue
+                images_payload = [{
+                    "name": os.path.basename(args.image_file),
+                    "image": encode_image_file(args.image_file),
+                }]
             print(f"\n[{cut_id}] 投入...")
-            resp = submit_job(args.endpoint_id, args.api_key, wf)
+            resp = submit_job(args.endpoint_id, args.api_key, wf, images=images_payload)
             job_id = resp.get("id", "")
             if not job_id:
                 print(f"  ❌ submit 失敗: {resp}")
@@ -277,6 +358,14 @@ def main():
             }
             append_job_map(args.output_root, args.endpoint, entry)
             print(f"  ✅ 完了 (exec {result.get('executionTime', '?')}ms / delay {result.get('delayTime', '?')}ms)")
+            if args.save_locally:
+                dest = theme_dir_from_id(cut_id, args.output_root)
+                saved = save_outputs(result, dest, cut_id)
+                if saved:
+                    for p in saved:
+                        print(f"  💾 saved: {p}")
+                else:
+                    print(f"  ⚠️  output に保存可能な base64 データなし: {list(result.get('output', {}).keys()) if isinstance(result.get('output'), dict) else type(result.get('output')).__name__}")
             completed += 1
         finally:
             release_lock(lock_file)
