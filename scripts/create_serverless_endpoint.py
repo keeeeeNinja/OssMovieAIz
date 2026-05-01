@@ -84,15 +84,27 @@ def rest_post(api_key, path, body):
         sys.exit(f"❌ HTTP {e.code} {path}: {body_txt}")
 
 
-def create_template(api_key, name, image, registry_auth_id=None):
+def create_template(api_key, name, image, registry_auth_id=None, kind="comfyui"):
+    """kind=comfyui (flux/i2v) / tts (Qwen3-TTS) を切り替え。env 変数が違う。"""
+    if kind == "tts":
+        env = {
+            "HF_HOME": "/runpod-volume/hf_cache",
+            "HUGGINGFACE_HUB_CACHE": "/runpod-volume/hf_cache",
+        }
+        readme = "OssMovieAIz Serverless Qwen3-TTS worker (auto-generated)."
+        disk = 30  # PyTorch + flash-attn + qwen-tts deps が太い
+    else:
+        env = {"COMFY_OUTPUT_PATH": "/runpod-volume/outputs"}
+        readme = "OssMovieAIz Serverless ComfyUI worker (auto-generated)."
+        disk = 20
     body = {
         "name": name,
         "imageName": image,
         "isServerless": True,
-        "containerDiskInGb": 20,
+        "containerDiskInGb": disk,
         "volumeInGb": 0,
-        "readme": "OssMovieAIz Serverless ComfyUI worker (auto-generated).",
-        "env": {"COMFY_OUTPUT_PATH": "/runpod-volume/outputs"},
+        "readme": readme,
+        "env": env,
     }
     if registry_auth_id:
         body["containerRegistryAuthId"] = registry_auth_id
@@ -134,11 +146,15 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--image",
                         default=os.environ.get("SERVERLESS_IMAGE", ""),
-                        help="Docker image 名（未指定なら環境変数 SERVERLESS_IMAGE を使う）")
+                        help="ComfyUI worker の Docker image（flux/i2v 用、env SERVERLESS_IMAGE）")
+    parser.add_argument("--tts-image",
+                        default=os.environ.get("SERVERLESS_TTS_IMAGE",
+                                                "ghcr.io/keeeeeninja/ossmovie-tts:latest"),
+                        help="TTS worker の Docker image（tts 用、env SERVERLESS_TTS_IMAGE）")
     parser.add_argument("--volume-id",
                         default=os.environ.get("RUNPOD_VOLUME_ID", "c1dbeweh5j"))
     parser.add_argument("--datacenter", default="EU-RO-1")
-    parser.add_argument("--kind", choices=["flux", "i2v", "both"], default="both")
+    parser.add_argument("--kind", choices=["flux", "i2v", "tts", "all"], default="all")
     parser.add_argument("--gpu-ids",
                         default="NVIDIA GeForce RTX 4090,NVIDIA GeForce RTX 5090",
                         help="プライオリティ順カンマ区切り（REST では gpuTypeIds の配列に変換）")
@@ -150,23 +166,30 @@ def main():
                         help="GHCR が private の場合 RunPod に登録した Container Registry Auth の ID")
     args = parser.parse_args()
 
-    if not args.image:
-        sys.exit("❌ --image または環境変数 SERVERLESS_IMAGE を指定してください")
-
     api_key = get_api_key()
 
+    # (name, exec_timeout_ms, image, kind) の順
     targets = []
-    if args.kind in ("flux", "both"):
-        targets.append(("ossmovie-flux", 600_000))
-    if args.kind in ("i2v", "both"):
-        targets.append(("ossmovie-i2v", 900_000))
+    if args.kind in ("flux", "all"):
+        if not args.image:
+            sys.exit("❌ flux 作成には --image または env SERVERLESS_IMAGE が必要")
+        targets.append(("ossmovie-flux", 600_000, args.image, "comfyui"))
+    if args.kind in ("i2v", "all"):
+        if not args.image:
+            sys.exit("❌ i2v 作成には --image または env SERVERLESS_IMAGE が必要")
+        targets.append(("ossmovie-i2v", 900_000, args.image, "comfyui"))
+    if args.kind in ("tts", "all"):
+        if not args.tts_image:
+            sys.exit("❌ tts 作成には --tts-image または env SERVERLESS_TTS_IMAGE が必要")
+        targets.append(("ossmovie-tts", 120_000, args.tts_image, "tts"))
 
     gpu_type_ids = [s.strip() for s in args.gpu_ids.split(",") if s.strip()]
 
     results = {}
-    for name, exec_ms in targets:
-        template_id = create_template(api_key, name, args.image,
-                                      registry_auth_id=args.registry_auth_id or None)
+    for name, exec_ms, image, kind in targets:
+        template_id = create_template(api_key, name, image,
+                                      registry_auth_id=args.registry_auth_id or None,
+                                      kind=kind)
         endpoint_id = create_endpoint(
             api_key, name, template_id, args.volume_id, args.datacenter,
             gpu_type_ids, args.workers_min, args.workers_max,
@@ -182,6 +205,8 @@ def main():
         print(f'  RUNPOD_ENDPOINT_FLUX={results["ossmovie-flux"]}')
     if "ossmovie-i2v" in results:
         print(f'  RUNPOD_ENDPOINT_I2V={results["ossmovie-i2v"]}')
+    if "ossmovie-tts" in results:
+        print(f'  RUNPOD_ENDPOINT_TTS={results["ossmovie-tts"]}')
 
 
 if __name__ == "__main__":

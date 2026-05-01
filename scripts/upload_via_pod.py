@@ -105,8 +105,30 @@ def rest_delete(api_key, path):
     urllib.request.urlopen(req, timeout=30).read()
 
 
+def get_hf_token():
+    """Mac の環境変数 → ~/.zshrc → 空 の優先順で HF_TOKEN を取得（任意）"""
+    t = os.environ.get("HF_TOKEN", "")
+    if t:
+        return t
+    try:
+        r = subprocess.run(
+            ["zsh", "-c", "source ~/.zshrc 2>/dev/null; echo $HF_TOKEN"],
+            capture_output=True, text=True, timeout=5,
+        )
+        return r.stdout.strip()
+    except Exception:
+        return ""
+
+
 def create_pod(api_key, name):
     """Network Volume を /runpod-volume にマウントした GPU Pod を作成（最小 GPU 優先）"""
+    # HF_TOKEN を Mac から取って Pod env に直接渡す（RunPod Secret に依存しない）。
+    # gated repo (Schnell, Dev 等) の wget でこのトークンを使う。短命 Pod なので OK。
+    hf_token = get_hf_token()
+    env_vars = {}
+    if hf_token:
+        env_vars = {"HF_TOKEN": hf_token}
+
     last_err = None
     for gpu in GPU_CANDIDATES:
         body = {
@@ -120,11 +142,13 @@ def create_pod(api_key, name):
             "cloudType": "SECURE",
             "dataCenterIds": [DATACENTER],
         }
+        if env_vars:
+            body["env"] = env_vars
         try:
             r = rest_post(api_key, "/pods", body)
             pod_id = r.get("id")
             if pod_id:
-                print(f"  GPU 確保: {gpu}")
+                print(f"  GPU 確保: {gpu}  (HF_TOKEN: {'付与' if hf_token else 'なし'})")
                 return pod_id
         except RuntimeError as e:
             last_err = e
@@ -156,7 +180,15 @@ def wait_ssh(api_key, pod_id, max_wait=300):
     sys.exit("❌ SSH 起動タイムアウト")
 
 
-def ssh_run(ip, port, cmd, stream=False):
+def ssh_run(ip, port, cmd, stream=False, with_hf_token=False):
+    """Pod に SSH してコマンドを実行。
+    with_hf_token=True の場合、Mac の HF_TOKEN を export してから実行
+    （RunPod の sshd は Docker container env を継承しないため、毎回明示的に渡す）。"""
+    if with_hf_token:
+        tok = get_hf_token()
+        if tok:
+            # 安全のため値は echo しない (set +x). HF_TOKEN を頭で export.
+            cmd = f"export HF_TOKEN='{tok}'; {cmd}"
     args = [
         "ssh", "-T", "-o", "StrictHostKeyChecking=no",
         "-o", "ConnectTimeout=30",
@@ -174,6 +206,15 @@ def verify_ssh(ip, port, retries=10):
             return True
         time.sleep(8)
     sys.exit("❌ SSH 疎通失敗")
+
+
+def probe_hf_token(ip, port):
+    """Pod 内で HF_TOKEN env が見えるか確認（値は出さない）"""
+    r = ssh_run(ip, port,
+                "if [ -n \"${HF_TOKEN:-}\" ]; then echo \"HF_TOKEN present (len=${#HF_TOKEN})\"; "
+                "else echo \"HF_TOKEN missing\"; fi")
+    if r.returncode == 0:
+        print(f"  Pod env: {r.stdout.strip()}")
 
 
 def terminate_pod(api_key, pod_id):
@@ -230,6 +271,7 @@ def main():
         print(f"  SSH: {ip}:{port}")
         verify_ssh(ip, port)
         print("  ✅ SSH 疎通 OK")
+        probe_hf_token(ip, port)
 
         # HF snapshot ジョブ: hub から repo 一式を Volume の hf_cache に取得
         for repo in args.hf_snapshot:
@@ -255,26 +297,28 @@ def main():
         for url, dest in jobs:
             dest_dir = os.path.dirname(dest)
             print(f"\n📥 {url}\n   → {dest}")
-            # huggingface-cli + hf_transfer で並列・自動リトライ・自動resume。
-            # 失敗時は wget --continue でリトライループ。
+            # Pod 内 Python で huggingface_hub 経由 DL（HF_TOKEN は env から自動使用）。
+            # 失敗時は素の wget --header フォールバック（Bearer 付き）。
             cmd = (
                 f"set -uo pipefail; "
                 f"mkdir -p '{dest_dir}'; cd '{dest_dir}'; "
                 f"FNAME='{os.path.basename(dest)}'; URL='{url}'; "
-                f"for i in 1 2 3 4 5; do "
-                f"  echo \"[try $i] wget -c\"; "
-                f"  wget -c --tries=20 --waitretry=5 --retry-connrefused "
-                f"    --retry-on-host-error --retry-on-http-error=503,502,500 "
-                f"    --progress=dot:giga -O \"$FNAME\" \"$URL\" 2>&1 | "
-                f"    awk 'NR%30==0 || /saved|ERROR|error/'; "
-                f"  RC=${{PIPESTATUS[0]}}; "
-                f"  if [ \"$RC\" = \"0\" ]; then echo \"download OK on try $i\"; break; fi; "
-                f"  echo \"try $i failed (rc=$RC), retrying in 5s\"; sleep 5; "
-                f"done; "
+                f"[ -L \"$FNAME\" ] && rm -f \"$FNAME\"; "
+                f"echo \"[try 1] curl -L (auth=$([ -n \\\"${{HF_TOKEN:-}}\\\" ] && echo yes || echo no))\"; "
+                # curl は --header の引数解釈がスペース込みでも壊れにくい
+                f"if [ -n \"${{HF_TOKEN:-}}\" ]; then "
+                f"  curl -fL --retry 10 --retry-delay 5 --retry-all-errors "
+                f"    -H \"Authorization: Bearer $HF_TOKEN\" "
+                f"    -o \"$FNAME\" \"$URL\"; "
+                f"else "
+                f"  curl -fL --retry 10 --retry-delay 5 --retry-all-errors "
+                f"    -o \"$FNAME\" \"$URL\"; "
+                f"fi; "
+                f"RC=$?; "
                 f"ls -lh \"$FNAME\"; "
                 f"[ \"$RC\" = \"0\" ] || exit 1"
             )
-            proc = ssh_run(ip, port, cmd, stream=True)
+            proc = ssh_run(ip, port, cmd, stream=True, with_hf_token=True)
             for line in proc.stdout:
                 print(f"  {line}", end="", flush=True)
             proc.wait()

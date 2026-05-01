@@ -1,10 +1,9 @@
 {
-  "_comment": "Flux 静止画ワークフロー (LoRA 1 個)。プレースホルダ: [PROMPT] [WIDTH] [HEIGHT] [SEED] [STEPS] [OUTPUT_PREFIX] [LORA_NAME] [LORA_STRENGTH]。LoRA を使わないなら flux.json を使う。",
+  "_comment": "Flux Schnell GGUF + LoRA ワークフロー (商用OK)。プレースホルダ: [PROMPT] [WIDTH] [HEIGHT] [SEED] [STEPS] [OUTPUT_PREFIX] [LORA_NAME] [LORA_STRENGTH]。LoRA を使わないなら flux_schnell.json を使う。Schnell ベースなので LoRA は Schnell 用に学習されたものを使うこと。Dev ベース LoRA は技術的にロード可能だがライセンス的にも品質的にも非推奨。",
   "3": {
-    "class_type": "UNETLoader",
+    "class_type": "UnetLoaderGGUF",
     "inputs": {
-      "unet_name": "flux1-dev.safetensors",
-      "weight_dtype": "fp8_e4m3fn"
+      "unet_name": "flux1-schnell-Q8_0.gguf"
     }
   },
   "4": {

@@ -24,7 +24,8 @@ OssMovieAIz/
 │   ├── video-script/     # ナレーション・BGM・音声生成
 │   └── telop-design/     # テロップデザイン設計・実装
 ├── scripts/
-│   ├── generate_tts_irodori.py  # Irodori-TTS VoiceDesign音声生成
+│   ├── generate_tts_qwen3.py    # Qwen3-TTS Serverless 音声生成（商用OK）
+│   ├── generate_tts_irodori.py  # 旧 Irodori-TTS（非推奨・互換ラッパー）
 │   └── generate_music.py        # ACE-Step BGM生成
 ├── remotion.config.ts
 ├── tsconfig.json
@@ -36,7 +37,7 @@ OssMovieAIz/
 - **プロジェクト初期化**: `bash scripts/reset_project.sh` — AdVideo.tsxをテンプレートに戻し、public/・作業中動画/をクリア（theme1〜5フォルダは再作成）
 - Remotion Studio: `npm run studio` → http://localhost:3000
 - レンダー: `npm run render` → `out/ad-video.mp4`
-- 音声生成: `python3 scripts/generate_tts_irodori.py --text "..." --caption "声の説明" --output public/narration.wav`
+- 音声生成: `python3 scripts/generate_tts_qwen3.py --text "..." --reference QwenTTS/reference_qwen_female_v1.wav --output public/narration.wav`（Qwen3-TTS Serverless / Apache 2.0）
 - BGM生成: `python3 scripts/generate_music.py --caption "..." --duration 30 --output public/bgm.mp3`（30秒超は自動分割。`--caption2`で後半の雰囲気を変更可）
 - ACE-Step: APIサーバー起動必須（localhost:8001）
 - 動画メタデータ: `ffmpeg -i <file>`
@@ -85,7 +86,7 @@ OssMovieAIz/
 | `/flux-image` | 各シーンのFlux用静止画プロンプトを生成し、Serverless で一括生成（Step 6） |
 | `/wan-video` | Wan 2.1 I2V を RunPod Serverless 経由でクリップ生成（Step 7） |
 | `/telop-design` | 映像完成後にbsスタイルをベースに差分調整＋文言作成・AdVideo.tsx実装（Step 8） |
-| `/video-script` | ナレーション原稿作成・BGM生成・Irodori-TTS音声生成（Step 9） |
+| `/video-script` | ナレーション原稿作成・BGM生成・Qwen3-TTS音声生成（Step 9） |
 | `/runpod-start` | （非推奨）通常フローでは使用しない。LoRA 学習など Pod が必要な例外用途のみ |
 
 退避済み（`.claude/skills/_archive/`）: `/kling-video` `/runway-video` `/pixverse-prompt` `/flux-face-prompt`

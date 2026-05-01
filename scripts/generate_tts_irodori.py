@@ -1,69 +1,53 @@
-"""
-ナレーション音声生成スクリプト（Irodori-TTS VoiceDesign）
+"""[非推奨] Irodori-TTS は Non-Commercial License のため廃止しました。
 
-使い方:
-  python3 scripts/generate_tts_irodori.py \
-    --text "テキスト" \
-    --caption "落ち着いた女性の声で、やわらかく自然に" \
+商用利用OKの **Qwen3-TTS** に置き換え済みです。同じ用途なら以下を使ってください:
+
+  python3 scripts/generate_tts_qwen3.py \\
+    --text "テキスト" \\
+    --reference QwenTTS/reference_qwen_female_v1.wav \\
     --output public/narration.wav
 
-※ 初回実行時にモデルが自動ダウンロードされます（~1GB）
-※ Apple Silicon (MPS) / CUDA / CPU に自動対応
+旧 CLI 互換のため、このファイルは引数を generate_tts_qwen3.py に転送します:
+  --text  → そのまま
+  --caption → --caption（design モードで使用）
+  --reference → --reference（clone モードで使用）
+  --output → そのまま
 """
 import argparse
+import os
 import subprocess
 import sys
 from pathlib import Path
 
-IRODORI_DIR = Path(__file__).resolve().parent.parent / "vendor" / "Irodori-TTS"
-HF_CHECKPOINT = "Aratako/Irodori-TTS-500M-v2-VoiceDesign"
+NEW_SCRIPT = Path(__file__).resolve().parent / "generate_tts_qwen3.py"
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Irodori-TTS VoiceDesign ラッパー")
-    parser.add_argument("--text", required=True, help="読み上げるテキスト")
-    parser.add_argument("--caption", required=True, help="声質・感情の説明テキスト")
-    parser.add_argument("--output", required=True, help="出力wavファイルパス")
-    parser.add_argument("--steps", type=int, default=40, help="推論ステップ数（デフォルト: 40）")
-    parser.add_argument("--seed", type=int, default=None, help="再現性用シード")
-    parser.add_argument("--cfg-scale-text", type=float, default=3.0, help="テキストCFGスケール")
-    parser.add_argument("--cfg-scale-caption", type=float, default=3.0, help="キャプションCFGスケール")
-    args = parser.parse_args()
+    p = argparse.ArgumentParser()
+    p.add_argument("--text", required=True)
+    p.add_argument("--output", required=True)
+    p.add_argument("--caption", default=None)
+    p.add_argument("--reference", default=None)
+    # 旧引数（互換のため受け取るが Qwen3 では使わない）
+    p.add_argument("--steps", type=int, default=None)
+    p.add_argument("--seed", type=int, default=None)
+    p.add_argument("--cfg-scale-text", type=float, default=None)
+    p.add_argument("--cfg-scale-caption", type=float, default=None)
+    args = p.parse_args()
 
-    if not IRODORI_DIR.exists():
-        print(f"エラー: Irodori-TTSが見つかりません: {IRODORI_DIR}", file=sys.stderr)
-        print("  git clone https://github.com/Aratako/Irodori-TTS.git vendor/Irodori-TTS", file=sys.stderr)
-        sys.exit(1)
+    print("⚠️  generate_tts_irodori.py は非推奨。商用ライセンス対応で Qwen3-TTS に切替済み。")
+    print("    今後は scripts/generate_tts_qwen3.py を直接呼んでください。")
+    print()
 
-    output_path = Path(args.output).resolve()
-    output_path.parent.mkdir(parents=True, exist_ok=True)
+    cmd = [sys.executable, str(NEW_SCRIPT), "--text", args.text, "--output", args.output]
+    if args.reference:
+        cmd += ["--reference", args.reference]
+    elif args.caption:
+        cmd += ["--caption", args.caption]
+    else:
+        sys.exit("❌ --reference または --caption を指定してください")
 
-    cmd = [
-        "uv", "run", "python", "infer.py",
-        "--hf-checkpoint", HF_CHECKPOINT,
-        "--text", args.text,
-        "--caption", args.caption,
-        "--no-ref",
-        "--output-wav", str(output_path),
-        "--num-steps", str(args.steps),
-        "--cfg-scale-text", str(args.cfg_scale_text),
-        "--cfg-scale-caption", str(args.cfg_scale_caption),
-    ]
-    if args.seed is not None:
-        cmd.extend(["--seed", str(args.seed)])
-
-    print(f"モード: Irodori-TTS VoiceDesign")
-    print(f"テキスト: {args.text}")
-    print(f"キャプション: {args.caption}")
-    print(f"ステップ数: {args.steps}")
-    print("音声を生成中...")
-
-    result = subprocess.run(cmd, cwd=str(IRODORI_DIR))
-    if result.returncode != 0:
-        print("エラー: 音声生成に失敗しました", file=sys.stderr)
-        sys.exit(result.returncode)
-
-    print(f"完了: {output_path}")
+    sys.exit(subprocess.call(cmd))
 
 
 if __name__ == "__main__":

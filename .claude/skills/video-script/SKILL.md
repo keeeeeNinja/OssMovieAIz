@@ -1,19 +1,19 @@
 ---
 name: video-script
-description: 作業中動画フォルダの動画を分析してナレーション原稿を生成し、Irodori-TTSで音声生成、ACE-StepでBGM生成まで行う。ナレーション、音声生成、BGM、という場面で使う。テロップ文言はStep 8の /telop-design で作成済みの前提。
+description: 作業中動画フォルダの動画を分析してナレーション原稿を生成し、Qwen3-TTS（RunPod Serverless）で音声生成、ACE-StepでBGM生成まで行う。ナレーション、音声生成、BGM、という場面で使う。テロップ文言はStep 8の /telop-design で作成済みの前提。
 allowed-tools: Bash(ffmpeg *), Bash(ffprobe *), Bash(ls *), Bash(python3 *), Bash(awk *), Bash(for *), Read, Write
 ---
 
 ## ナレーション・BGM生成
 
-複数のクリップを繋いだ1本のショート動画用に、ナレーション原稿を作成し、Irodori-TTS VoiceDesign で音声ファイルを生成する。BGMもACE-Stepで生成する。
+複数のクリップを繋いだ1本のショート動画用に、ナレーション原稿を作成し、Qwen3-TTS（RunPod Serverless）で音声ファイルを生成する。BGMもACE-Stepで生成する。
 
 ### 前提知識
 
 - `作業中動画/` 内の `.mp4` ファイルは**すべて1本の動画を構成するクリップ**
 - **テロップ文言は `/telop-design`（Step 8）で作成済み**。このスキルではテロップを扱わない
 - **ナレーション**: 全クリップ合計時間に収まる1本の連続した原稿
-- **音声合成**: Irodori-TTS VoiceDesign（GPU不要・テキストで声質指定・48kHz高音質）
+- **音声合成**: Qwen3-TTS-12Hz-1.7B-Base on RunPod Serverless（24kHz、リファレンス音声でクローン、Apache 2.0）
 
 ---
 
@@ -76,9 +76,11 @@ Step 3のフレーム分析と合わせて、以下の観点から**ナレータ
 → 感情: [例: 押しつけず、自然に共感を誘う]
 ```
 
-#### 2-3. キャプションを生成する
+#### 2-3. リファレンス音声と合成テキストを準備する
 
-ペルソナから Irodori-TTS VoiceDesign 用のキャプションを生成する。
+**Qwen3-TTS は「リファレンス音声 + 合成テキスト」の voice cloning が基本**。プロジェクト既定では `QwenTTS/reference_qwen_female_v1.wav`（VoiceDesign 由来・商用OK）を使う。
+
+リファレンスを変えたい場合のみ、以下のキャプションルールに沿って `python3 scripts/test_qwen3_tts.py` で別キャラを VoiceDesign 生成 → 採用 wav をリファレンスに昇格する。
 
 **キャプション生成ルール：**
 - 「〇〇な声で話してください」のような汎用指示は**禁止**
@@ -171,8 +173,8 @@ mkdir -p /tmp/video-script-frames && ffmpeg -i "VIDEO_PATH" -vf "fps=1/5,scale=6
 - ナレーション終了目安: エンドカード開始の約1秒前
 
 ## 話者情報
-- エンジン: Irodori-TTS VoiceDesign
-- キャプション: [声の説明テキスト]
+- エンジン: Qwen3-TTS-12Hz-1.7B-Base (RunPod Serverless)
+- リファレンス: QwenTTS/reference_qwen_female_v1.wav（既定）
 - ペース: [ゆっくり/普通/早口]
 ```
 
@@ -213,19 +215,20 @@ Step 2 で自動生成したキャプションと Step 4 のナレーション�
 
 #### 5-1. 音声を生成する
 
-Step 2-3 で生成したキャプションと Step 4 のナレーション本文でBashで実行する。`NARRATION_TEXT` と `CAPTION` を実際の値に置き換え:
+Step 4 のナレーション本文を使い、Qwen3-TTS Serverless で生成する。`NARRATION_TEXT` を実際の値に置き換え:
 
 ```
-python3 /Users/keeee/Desktop/Dev/OssMovieAIz/scripts/generate_tts_irodori.py \
+python3 /Users/keeee/Desktop/Dev/OssMovieAIz/scripts/generate_tts_qwen3.py \
   --text "NARRATION_TEXT" \
-  --caption "CAPTION" \
+  --reference /Users/keeee/Desktop/Dev/OssMovieAIz/QwenTTS/reference_qwen_female_v1.wav \
   --output "/Users/keeee/Desktop/Dev/OssMovieAIz/public/narration.wav"
 ```
 
-⚠️ **Irodori-TTSの尺ブレに注意:** Irodori-TTSはseedが毎回ランダムなため、同じ文字数でも出力尺が大きくブレる（例: 70文字で14秒→25秒）。文字数×ペース係数の推定は目安にしかならない。対策:
-- 良い尺が出たらseedをログから控えておく（`[seed] used_seed: XXXX` で表示される）
-- 文字数を調整して再生成 → 尺を計測 → 目標に近づくまで繰り返す
-- 良いseedが見つかったら `--seed SEED` で固定して文字数調整のみで微調整する
+⚠️ **Qwen3-TTS の特性:**
+- リファレンス音声があれば声質は安定（Irodori のような毎回ランダムseedブレはほぼ無い）
+- 初回はコールドスタート（モデルロード）で60〜90秒、2回目以降はホット状態で 3〜5秒/件
+- 出力は 24kHz wav。Remotion 側の `<Audio>` で問題なく再生可能
+- ref_text は --reference-text 未指定時に Whisper で自動文字起こし。固定したい場合は `--reference-text "..."` で指定
 
 #### 5-2. 音声の長さを計測する
 

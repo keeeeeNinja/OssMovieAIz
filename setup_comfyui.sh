@@ -200,7 +200,9 @@ mkdir -p /workspace/ComfyUI/models/unet
 mkdir -p /workspace/ComfyUI/models/clip
 mkdir -p /workspace/ComfyUI/models/loras
 
-# Helper: download with optional HF_TOKEN auth (needed for gated BFL repo)
+# Helper: download with optional HF_TOKEN auth.
+# Schnell + 商用OK encoder/VAE に切り替え後は HF_TOKEN 不要だが、
+# 受講生が独自に gated repo（カスタムLoRA等）を追加する余地として残す。
 hf_wget() {
   local url=$1
   local dest=$2
@@ -213,9 +215,10 @@ hf_wget() {
 export -f hf_wget
 
 cd /workspace/ComfyUI/models/unet
-# Comfy-Org repackaged fp8 (public), rename to flux1-dev.safetensors to match generate_flux_images.py
-[ ! -f "flux1-dev.safetensors" ] && \
-  hf_wget "https://huggingface.co/Comfy-Org/flux1-dev/resolve/main/flux1-dev-fp8.safetensors" "flux1-dev.safetensors" &
+# Flux Schnell GGUF Q8_0 (Apache 2.0、商用利用OK)。
+# 旧 flux1-dev.safetensors（Non-Commercial License）は廃止。
+[ ! -f "flux1-schnell-Q8_0.gguf" ] && \
+  hf_wget "https://huggingface.co/city96/FLUX.1-schnell-gguf/resolve/main/flux1-schnell-Q8_0.gguf" "flux1-schnell-Q8_0.gguf" &
 PID_F1=$!
 
 cd /workspace/ComfyUI/models/clip
@@ -228,31 +231,20 @@ PID_F2=$!
 PID_F3=$!
 
 cd /workspace/ComfyUI/models/vae
-# ae.safetensors is gated (BFL), requires HF_TOKEN
+# ae.safetensors を Schnell repo (Apache 2.0、token 不要) から取得。
+# 旧 FLUX.1-dev/ae.safetensors は gated＋NC で受講生に配布できないため。
 [ ! -f "ae.safetensors" ] && \
-  hf_wget "https://huggingface.co/black-forest-labs/FLUX.1-dev/resolve/main/ae.safetensors" "ae.safetensors" &
+  hf_wget "https://huggingface.co/black-forest-labs/FLUX.1-schnell/resolve/main/ae.safetensors" "ae.safetensors" &
 PID_F4=$!
 
 wait $PID_F1 $PID_F2 $PID_F3 $PID_F4
-echo '[6b/8] Flux fp8 models downloaded'
+echo '[6b/8] Flux Schnell + encoders + VAE downloaded'
 
-# --- 6c. Flux LoRAs from GitHub Releases (public repo) ---
-echo '[6c/8] Downloading Flux LoRAs from GitHub Releases...'
-cd /workspace/ComfyUI/models/loras
-
-LORA_BASE="https://github.com/keeeeeNinja/OssMovieAIz-loras/releases/download"
-for lora in \
-  "v1/ayano_chan_flux_lora-step00001800.safetensors" \
-  "v1/URDP001_v2.safetensors" \
-  "v1/flux_japanese_girl_v2.safetensors" \
-  "v1/sawayaka_men_v1.safetensors" \
-  "rin_chan_v1/rin_chan_v1.safetensors"
-do
-  fname=$(basename "$lora")
-  [ ! -f "$fname" ] && wget -q -L "${LORA_BASE}/${lora}" &
-done
-wait
-echo '[6c/8] LoRAs downloaded'
+# --- 6c. Flux LoRAs ---
+# 旧 LoRA 群（ayano_chan / URDP001 / japanese_girl / sawayaka_men / rin_chan）は
+# すべて Flux Dev / Kontext Dev 由来の派生物のためライセンス制約により廃止。
+# Schnell ベースで再学習した LoRA を使う場合はここで取得する。
+echo '[6c/8] LoRAs: 商用LoRA未配布のためスキップ (旧Dev-LoRA は廃止済み)'
 
 else
 echo '[6b/8] [WAN-ONLY] Flux models skipped'
