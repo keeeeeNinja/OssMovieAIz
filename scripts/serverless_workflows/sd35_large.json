@@ -1,0 +1,50 @@
+{
+  "_comment": "Stable Diffusion 3.5 Large (Comfy-Org fp8 scaled) ワークフロー。プレースホルダ: [PROMPT] [WIDTH] [HEIGHT] [SEED] [STEPS] [OUTPUT_PREFIX]。CheckpointLoaderSimple が MODEL/VAE を、TripleCLIPLoader が clip_l+clip_g+t5xxl をロードする。SD3.5 Large は cfg=4.0 / steps=28 推奨。Stability Community License: 年商 $1M 未満は無料商用OK。",
+  "1": {
+    "class_type": "CheckpointLoaderSimple",
+    "inputs": { "ckpt_name": "sd3.5_large_fp8_scaled.safetensors" }
+  },
+  "2": {
+    "class_type": "TripleCLIPLoader",
+    "inputs": {
+      "clip_name1": "clip_l.safetensors",
+      "clip_name2": "clip_g.safetensors",
+      "clip_name3": "t5xxl_fp8_e4m3fn.safetensors"
+    }
+  },
+  "3": {
+    "class_type": "CLIPTextEncode",
+    "inputs": { "text": "[PROMPT]", "clip": ["2", 0] }
+  },
+  "4": {
+    "class_type": "CLIPTextEncode",
+    "inputs": { "text": "low quality, blurry, deformed, bad anatomy, ugly, watermark, text", "clip": ["2", 0] }
+  },
+  "5": {
+    "class_type": "EmptySD3LatentImage",
+    "inputs": { "width": "[WIDTH]", "height": "[HEIGHT]", "batch_size": 1 }
+  },
+  "6": {
+    "class_type": "KSampler",
+    "inputs": {
+      "model": ["1", 0],
+      "positive": ["3", 0],
+      "negative": ["4", 0],
+      "latent_image": ["5", 0],
+      "seed": "[SEED]",
+      "steps": "[STEPS]",
+      "cfg": 4.0,
+      "sampler_name": "euler",
+      "scheduler": "sgm_uniform",
+      "denoise": 1.0
+    }
+  },
+  "7": {
+    "class_type": "VAEDecode",
+    "inputs": { "samples": ["6", 0], "vae": ["1", 2] }
+  },
+  "8": {
+    "class_type": "SaveImage",
+    "inputs": { "images": ["7", 0], "filename_prefix": "[OUTPUT_PREFIX]" }
+  }
+}

@@ -1,0 +1,33 @@
+# OssMovieAIz Serverless TTS Worker (Qwen3-TTS-12Hz)
+# Three modes via input.mode:
+#   - "clone"  → Qwen/Qwen3-TTS-12Hz-1.7B-Base + ref_audio + ref_text
+#   - "preset" → Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice + speaker name
+#   - "design" → Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign + natural-language instruct
+#
+# Model weights are cached at /runpod-volume/hf_cache (Network Volume) so that
+# cold starts after the first request reload from the Volume rather than HF.
+
+ARG BASE_IMAGE=pytorch/pytorch:2.4.0-cuda12.4-cudnn9-runtime
+FROM ${BASE_IMAGE}
+
+ENV PYTHONUNBUFFERED=1 \
+    HF_HOME=/runpod-volume/hf_cache \
+    HUGGINGFACE_HUB_CACHE=/runpod-volume/hf_cache
+
+WORKDIR /workspace
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends sox libsox-dev libsndfile1 git \
+ && rm -rf /var/lib/apt/lists/*
+
+# qwen-tts pulls transformers, accelerate, librosa, soundfile etc.
+# runpod is the Serverless runtime SDK.
+RUN pip install --no-cache-dir runpod qwen-tts soundfile
+
+# flash-attn は GPU 必須。ビルド失敗しても sdpa にフォールバックするので || true。
+# RunPod の 4090/A100 イメージなら通常通る。MAX_JOBS=4 で OOM 回避。
+RUN MAX_JOBS=4 pip install --no-cache-dir flash-attn --no-build-isolation || true
+
+COPY docker/handler_tts.py /workspace/handler.py
+
+CMD ["python", "-u", "handler.py"]

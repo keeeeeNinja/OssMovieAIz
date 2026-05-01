@@ -107,7 +107,12 @@ def apply_placeholders(workflow, replacements):
 
 
 def build_flux_workflow(item, args):
-    template_name = "flux_lora" if args.lora else "flux"
+    if args.template:
+        template_name = args.template
+    elif args.lora:
+        template_name = "flux_lora"
+    else:
+        template_name = "flux"
     wf = load_template(template_name)
     seed = args.seed if args.seed else (int(time.time() * 1000) ^ os.getpid()) & 0xFFFFFFFF
     replacements = {
@@ -141,6 +146,36 @@ def build_i2v_workflow(item, args):
     return apply_placeholders(wf, replacements)
 
 
+def build_tts_input(item, args):
+    """TTS は ComfyUI ではないので workflow JSON を持たない。handler が直接受け取る dict を返す。"""
+    mode = item.get("mode") or args.tts_mode
+    inp = {
+        "mode": mode,
+        "text": item.get("text") or args.prompt_text or item.get("prompt", ""),
+        "language": item.get("language") or args.tts_language,
+    }
+    if mode == "clone":
+        ref_path = item.get("ref_audio") or args.tts_ref_audio
+        ref_text = item.get("ref_text") or args.tts_ref_text
+        if not ref_path or not os.path.isfile(ref_path):
+            raise ValueError(f"--tts-ref-audio が必要 (clone mode): {ref_path}")
+        if not ref_text:
+            raise ValueError("--tts-ref-text が必要 (clone mode)")
+        inp["ref_audio"] = encode_image_file(ref_path)  # base64 (関数名は image だが汎用)
+        inp["ref_text"] = ref_text
+    elif mode == "preset":
+        inp["speaker"] = item.get("speaker") or args.tts_speaker
+    elif mode == "design":
+        inp["instruct"] = item.get("instruct") or args.tts_instruct
+    else:
+        raise ValueError(f"unknown tts mode: {mode}")
+    # サンプリング系（任意）
+    for k in ("do_sample", "top_k", "top_p", "temperature", "repetition_penalty"):
+        if hasattr(args, f"tts_{k}") and getattr(args, f"tts_{k}") is not None:
+            inp[k] = getattr(args, f"tts_{k}")
+    return inp
+
+
 def http_post_json(url, payload, headers):
     body = json.dumps(payload).encode("utf-8")
     req = urllib.request.Request(
@@ -171,23 +206,26 @@ def encode_image_file(path):
         return base64.b64encode(f.read()).decode("ascii")
 
 
-def submit_job(endpoint_id, api_key, workflow, images=None):
-    """images: [{"name": "xxx.png", "image": "<base64>"}] 形式のリスト。
-    公式 worker-comfyui は input.images を ComfyUI input/ にアップロードしてから
-    ワークフローを実行する。LoadImage の image="xxx.png" がそのまま参照される。"""
+def submit_job(endpoint_id, api_key, workflow, images=None, raw_input=None):
+    """ComfyUI 系: workflow / images を input.workflow / input.images で投げる。
+    TTS 系: raw_input が指定されれば input にそのまま展開する（workflow を持たない）。"""
     url = f"{API_BASE}/{endpoint_id}/run"
-    inp = {"workflow": workflow}
-    if images:
-        inp["images"] = images
+    if raw_input is not None:
+        inp = raw_input
+    else:
+        inp = {"workflow": workflow}
+        if images:
+            inp["images"] = images
     payload = {"input": inp}
     return http_post_json(url, payload, {"Authorization": f"Bearer {api_key}"})
 
 
 def save_outputs(result, dest_dir, scene_id):
     """job 完了結果から base64 出力を decode してローカル保存。
-    公式 worker-comfyui のレスポンス形式に対応:
-      output.images: [{"filename":"xxx.png","type":"image/png","data":"<b64>"}]
-      output.message が文字列の場合は無視
+    対応形式:
+      ComfyUI: output.images = [{"filename":"xxx.png","data":"<b64>"}]
+      Wan I2V: output.videos / output.files
+      Qwen3-TTS: output.audio (str), output.sample_rate, output.duration_sec
     返り値: 保存したパスのリスト"""
     os.makedirs(dest_dir, exist_ok=True)
     out = result.get("output") or {}
@@ -213,6 +251,16 @@ def save_outputs(result, dest_dir, scene_id):
             with open(local, "wb") as f:
                 f.write(base64.b64decode(data))
             saved.append(local)
+    # audio キー (Qwen3-TTS): output.audio が base64 文字列
+    if isinstance(out.get("audio"), str) and out["audio"]:
+        sr = out.get("sample_rate")
+        dur = out.get("duration_sec")
+        local = os.path.join(dest_dir, f"tts_{scene_id}.wav")
+        with open(local, "wb") as f:
+            f.write(base64.b64decode(out["audio"]))
+        saved.append(local)
+        if sr or dur:
+            print(f"  🎙️  sample_rate={sr} duration={dur}s")
     return saved
 
 
@@ -251,9 +299,9 @@ def append_job_map(output_root, endpoint, entry):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--endpoint", choices=["flux", "i2v"], required=True)
+    parser.add_argument("--endpoint", choices=["flux", "i2v", "tts"], required=True)
     parser.add_argument("--endpoint-id", default="",
-                        help="未指定なら環境変数 RUNPOD_ENDPOINT_FLUX / RUNPOD_ENDPOINT_I2V を参照")
+                        help="未指定なら環境変数 RUNPOD_ENDPOINT_FLUX / RUNPOD_ENDPOINT_I2V / RUNPOD_ENDPOINT_TTS を参照")
     parser.add_argument("--api-key", default=os.environ.get("RUNPOD_API_KEY", ""))
     parser.add_argument("--prompts", required=False, default="",
                         help="プロンプト JSON。--prompt-text 単独使用時は不要")
@@ -267,6 +315,26 @@ def main():
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--timeout", type=int, default=900)
     parser.add_argument("--clean-locks", action="store_true")
+    parser.add_argument("--template", default="",
+                        help="serverless_workflows/ 配下のテンプレ名（拡張子なし）。"
+                             "未指定なら lora あれば flux_lora、なければ flux を使用。"
+                             "Schnell に切り替えるなら --template flux_schnell を指定")
+    # --- TTS (Qwen3-TTS) 専用 ---
+    parser.add_argument("--tts-mode", choices=["clone", "preset", "design"], default="clone")
+    parser.add_argument("--tts-language", default="Japanese")
+    parser.add_argument("--tts-ref-audio", default="",
+                        help="clone mode: リファレンス wav のローカルパス（base64 で送信）")
+    parser.add_argument("--tts-ref-text", default="",
+                        help="clone mode: リファレンス wav の書き起こしテキスト")
+    parser.add_argument("--tts-speaker", default="ono_anna",
+                        help="preset mode: 話者名（aiden/ono_anna 等の9種）")
+    parser.add_argument("--tts-instruct", default="",
+                        help="design mode: 自然言語の声スタイル指示")
+    parser.add_argument("--tts-do-sample", type=int, default=None)
+    parser.add_argument("--tts-top-k", type=int, default=None)
+    parser.add_argument("--tts-top-p", type=float, default=None)
+    parser.add_argument("--tts-temperature", type=float, default=None)
+    parser.add_argument("--tts-repetition-penalty", type=float, default=None)
     parser.add_argument("--prompt-text", default="",
                         help="単発テスト用: id=TEST のシーンを 1 件作って実行")
     parser.add_argument("--negative-text", default="blurry, low quality, deformed, bad anatomy",
@@ -278,7 +346,8 @@ def main():
     args = parser.parse_args()
 
     if not args.endpoint_id:
-        env = "RUNPOD_ENDPOINT_FLUX" if args.endpoint == "flux" else "RUNPOD_ENDPOINT_I2V"
+        env = {"flux": "RUNPOD_ENDPOINT_FLUX", "i2v": "RUNPOD_ENDPOINT_I2V",
+               "tts": "RUNPOD_ENDPOINT_TTS"}[args.endpoint]
         args.endpoint_id = os.environ.get(env, "")
     if not args.endpoint_id:
         sys.exit(f"❌ --endpoint-id か環境変数 RUNPOD_ENDPOINT_{args.endpoint.upper()} を指定してください")
@@ -297,6 +366,8 @@ def main():
             test_item["negative"] = args.negative_text
             if args.image_file:
                 test_item["image"] = os.path.basename(args.image_file)
+        if args.endpoint == "tts":
+            test_item["text"] = args.prompt_text
         prompts = [test_item]
     else:
         if not args.prompts:
@@ -319,7 +390,11 @@ def main():
         shutil.rmtree(lock_dir, ignore_errors=True)
         print(f"ロックディレクトリを削除: {lock_dir}")
 
-    builder = build_flux_workflow if args.endpoint == "flux" else build_i2v_workflow
+    builder = {
+        "flux": build_flux_workflow,
+        "i2v": build_i2v_workflow,
+        "tts": build_tts_input,
+    }[args.endpoint]
     print(f"Endpoint: {args.endpoint} ({args.endpoint_id})")
     print(f"対象シーン: {[p['id'] for p in prompts]}")
 
@@ -333,9 +408,9 @@ def main():
             continue
         try:
             wf = builder(item, args)
-            # --image-file が指定されていれば input.images に注入
+            # --image-file が指定されていれば input.images に注入（ComfyUI 系のみ）
             images_payload = None
-            if args.image_file:
+            if args.image_file and args.endpoint in ("flux", "i2v"):
                 if not os.path.isfile(args.image_file):
                     print(f"  ❌ --image-file が存在しません: {args.image_file}")
                     failed += 1
@@ -345,7 +420,11 @@ def main():
                     "image": encode_image_file(args.image_file),
                 }]
             print(f"\n[{cut_id}] 投入...")
-            resp = submit_job(args.endpoint_id, args.api_key, wf, images=images_payload)
+            if args.endpoint == "tts":
+                # TTS は wf が input dict そのもの
+                resp = submit_job(args.endpoint_id, args.api_key, None, raw_input=wf)
+            else:
+                resp = submit_job(args.endpoint_id, args.api_key, wf, images=images_payload)
             job_id = resp.get("id", "")
             if not job_id:
                 print(f"  ❌ submit 失敗: {resp}")
