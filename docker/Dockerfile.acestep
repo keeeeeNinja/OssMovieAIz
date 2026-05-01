@@ -1,0 +1,40 @@
+# OssMovieAIz Serverless ACE-Step XL BGM Worker
+#
+# Generates instrumental / vocal music from a text caption.
+# Uses ACE-Step-1.5 codebase with the XL Turbo variant (4-step distilled, fast).
+# Model weights cached on Network Volume at /runpod-volume/hf_cache.
+#
+# Input schema:
+#   {"caption": str, "duration": int, "bpm": int (optional), "lyrics": str (optional), "seed": int (optional)}
+# Output:
+#   {"audio": base64 wav, "sample_rate": int, "duration_sec": float}
+
+ARG BASE_IMAGE=pytorch/pytorch:2.4.0-cuda12.4-cudnn9-runtime
+FROM ${BASE_IMAGE}
+
+ENV PYTHONUNBUFFERED=1 \
+    HF_HOME=/runpod-volume/hf_cache \
+    HUGGINGFACE_HUB_CACHE=/runpod-volume/hf_cache
+
+WORKDIR /workspace
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends git ffmpeg libsndfile1 \
+ && rm -rf /var/lib/apt/lists/*
+
+# ACE-Step-1.5 リポジトリを焼き込む（コミット固定で再現性担保）
+ARG ACESTEP_COMMIT=main
+RUN git clone https://github.com/ace-step/ACE-Step-1.5.git /workspace/ACE-Step-1.5 \
+ && cd /workspace/ACE-Step-1.5 \
+ && git checkout "${ACESTEP_COMMIT}" \
+ && pip install --no-cache-dir -e .
+
+# Serverless SDK + 依存（vllm は LLM ハンドラ用、軽量代替の transformers でも可）
+RUN pip install --no-cache-dir runpod soundfile transformers accelerate
+
+# flash-attn は GPU 必須・ビルド失敗時は sdpa にフォールバックするので || true
+RUN MAX_JOBS=4 pip install --no-cache-dir flash-attn --no-build-isolation || true
+
+COPY docker/handler_acestep.py /workspace/handler.py
+
+CMD ["python", "-u", "handler.py"]
