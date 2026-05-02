@@ -37,15 +37,9 @@ import shutil
 from dotenv import load_dotenv
 from pathlib import Path
 
-# .env 読み込み優先度: プロジェクトルート → ~/.config/ossmovie/.env → 既存環境変数
-_env_candidates = [
-    Path.cwd() / ".env",
-    Path.home() / ".config" / "ossmovie" / ".env",
-]
-for _path in _env_candidates:
-    if _path.exists():
-        load_dotenv(_path, override=True)
-        break
+_env_path = Path.cwd() / ".env"
+if _env_path.exists():
+    load_dotenv(_env_path, override=False)
 
 API_BASE = "https://api.runpod.ai/v2"
 WORKFLOWS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "serverless_workflows")
@@ -144,6 +138,23 @@ def build_i2v_workflow(item, args):
         "[OUTPUT_PREFIX]": f"scene_{item['id']}_wan21",
     }
     return apply_placeholders(wf, replacements)
+
+
+def build_acestep_input(item, args):
+    """ACE-Step は ComfyUI ではないので handler に直接 dict を渡す。"""
+    inp = {
+        "caption": item.get("caption") or args.ace_caption or args.prompt_text,
+        "duration": int(item.get("duration") or args.ace_duration),
+        "bpm": int(item.get("bpm") or args.ace_bpm),
+        "lyrics": item.get("lyrics") or args.ace_lyrics or "",
+        "variant": item.get("variant") or args.ace_variant,
+    }
+    seed = item.get("seed") if item.get("seed") is not None else args.ace_seed
+    if seed is not None:
+        inp["seed"] = int(seed)
+    if not inp["caption"]:
+        raise ValueError("--ace-caption または --prompt-text が必要")
+    return inp
 
 
 def build_tts_input(item, args):
@@ -299,9 +310,9 @@ def append_job_map(output_root, endpoint, entry):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--endpoint", choices=["flux", "i2v", "tts"], required=True)
+    parser.add_argument("--endpoint", choices=["flux", "i2v", "tts", "acestep"], required=True)
     parser.add_argument("--endpoint-id", default="",
-                        help="未指定なら環境変数 RUNPOD_ENDPOINT_FLUX / RUNPOD_ENDPOINT_I2V / RUNPOD_ENDPOINT_TTS を参照")
+                        help="未指定なら環境変数 RUNPOD_ENDPOINT_FLUX / I2V / TTS / ACESTEP を参照")
     parser.add_argument("--api-key", default=os.environ.get("RUNPOD_API_KEY", ""))
     parser.add_argument("--prompts", required=False, default="",
                         help="プロンプト JSON。--prompt-text 単独使用時は不要")
@@ -330,6 +341,14 @@ def main():
                         help="preset mode: 話者名（aiden/ono_anna 等の9種）")
     parser.add_argument("--tts-instruct", default="",
                         help="design mode: 自然言語の声スタイル指示")
+    # --- ACE-Step (BGM) 専用 ---
+    parser.add_argument("--ace-caption", default="", help="ACE-Step: 曲スタイルの説明")
+    parser.add_argument("--ace-duration", type=int, default=30, help="ACE-Step: 秒数 (10..600)")
+    parser.add_argument("--ace-bpm", type=int, default=120, help="ACE-Step: BPM")
+    parser.add_argument("--ace-lyrics", default="", help="ACE-Step: 歌詞（インストなら空）")
+    parser.add_argument("--ace-variant", default="xl-turbo",
+                        help="ACE-Step バリアント: xl-turbo / xl-base / xl-sft")
+    parser.add_argument("--ace-seed", type=int, default=None)
     parser.add_argument("--tts-do-sample", type=int, default=None)
     parser.add_argument("--tts-top-k", type=int, default=None)
     parser.add_argument("--tts-top-p", type=float, default=None)
@@ -347,7 +366,8 @@ def main():
 
     if not args.endpoint_id:
         env = {"flux": "RUNPOD_ENDPOINT_FLUX", "i2v": "RUNPOD_ENDPOINT_I2V",
-               "tts": "RUNPOD_ENDPOINT_TTS"}[args.endpoint]
+               "tts": "RUNPOD_ENDPOINT_TTS",
+               "acestep": "RUNPOD_ENDPOINT_ACESTEP"}[args.endpoint]
         args.endpoint_id = os.environ.get(env, "")
     if not args.endpoint_id:
         sys.exit(f"❌ --endpoint-id か環境変数 RUNPOD_ENDPOINT_{args.endpoint.upper()} を指定してください")
@@ -394,6 +414,7 @@ def main():
         "flux": build_flux_workflow,
         "i2v": build_i2v_workflow,
         "tts": build_tts_input,
+        "acestep": build_acestep_input,
     }[args.endpoint]
     print(f"Endpoint: {args.endpoint} ({args.endpoint_id})")
     print(f"対象シーン: {[p['id'] for p in prompts]}")
@@ -420,8 +441,8 @@ def main():
                     "image": encode_image_file(args.image_file),
                 }]
             print(f"\n[{cut_id}] 投入...")
-            if args.endpoint == "tts":
-                # TTS は wf が input dict そのもの
+            if args.endpoint in ("tts", "acestep"):
+                # raw input dict（ComfyUI workflow を持たない handler）
                 resp = submit_job(args.endpoint_id, args.api_key, None, raw_input=wf)
             else:
                 resp = submit_job(args.endpoint_id, args.api_key, wf, images=images_payload)

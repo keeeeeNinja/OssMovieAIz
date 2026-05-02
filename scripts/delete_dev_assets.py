@@ -6,10 +6,9 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-for _path in [Path.cwd() / ".env", Path.home() / ".config" / "ossmovie" / ".env"]:
-    if _path.exists():
-        load_dotenv(_path, override=True)
-        break
+_env_path = Path.cwd() / ".env"
+if _env_path.exists():
+    load_dotenv(_env_path, override=False)
 
 for _k in ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN"):
     os.environ.pop(_k, None)
@@ -23,7 +22,9 @@ c = boto3.client(
     aws_secret_access_key=os.environ["RUNPOD_S3_SECRET_KEY"],
     region_name=os.environ["RUNPOD_S3_REGION"],
 )
-bucket = os.environ.get("RUNPOD_VOLUME_ID", "c1dbeweh5j")
+bucket = os.environ.get("RUNPOD_VOLUME_ID", "")
+if not bucket:
+    sys.exit("❌ RUNPOD_VOLUME_ID を .env に設定してください")
 
 TARGETS = [
     "ComfyUI/models/unet/flux1-dev.safetensors",

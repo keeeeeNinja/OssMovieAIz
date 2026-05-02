@@ -14,14 +14,9 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-_env_candidates = [
-    Path.cwd() / ".env",
-    Path.home() / ".config" / "ossmovie" / ".env",
-]
-for _path in _env_candidates:
-    if _path.exists():
-        load_dotenv(_path, override=True)
-        break
+_env_path = Path.cwd() / ".env"
+if _env_path.exists():
+    load_dotenv(_env_path, override=False)
 
 for _k in ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN"):
     os.environ.pop(_k, None)
@@ -56,8 +51,11 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument("local")
     p.add_argument("key")
-    p.add_argument("--bucket", default=os.environ.get("RUNPOD_VOLUME_ID", "c1dbeweh5j"))
+    p.add_argument("--bucket", default=os.environ.get("RUNPOD_VOLUME_ID", ""))
     args = p.parse_args()
+
+    if not args.bucket:
+        sys.exit("❌ RUNPOD_VOLUME_ID を .env に設定するか --bucket を指定してください")
 
     if not os.path.isfile(args.local):
         sys.exit(f"❌ ローカルファイルなし: {args.local}")

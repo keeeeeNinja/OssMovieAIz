@@ -3,20 +3,24 @@
 Volume 上の壊れた ae.safetensors を HF_TOKEN 経由で再ダウンロードして上書きする。
 
 前提:
-- ~/.zshrc に HF_TOKEN（gated アクセス権限あり）
+- .env に HF_TOKEN（gated アクセス権限あり）
 - .env に S3 認証情報
 
 使い方:
-  zsh -c 'source ~/.zshrc; python scripts/fix_ae_safetensors.py'
+  python3 scripts/fix_ae_safetensors.py
 """
 import os
 import sys
 import time
 import urllib.request
 import urllib.error
+from pathlib import Path
 
 from dotenv import load_dotenv
-load_dotenv(override=True)
+
+_env_path = Path.cwd() / ".env"
+if _env_path.exists():
+    load_dotenv(_env_path, override=False)
 
 # AWS_* 残骸が残っていると boto3 がそちらを優先するので除去
 for _k in ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN"):
@@ -26,13 +30,15 @@ import boto3
 
 HF_URL = "https://huggingface.co/black-forest-labs/FLUX.1-dev/resolve/main/ae.safetensors"
 LOCAL_PATH = "/tmp/ae_safetensors_dl"
-BUCKET = os.environ.get("RUNPOD_VOLUME_ID", "c1dbeweh5j")
+BUCKET = os.environ.get("RUNPOD_VOLUME_ID", "")
+if not BUCKET:
+    sys.exit("❌ RUNPOD_VOLUME_ID を .env に設定してください")
 KEY = "ComfyUI/models/vae/ae.safetensors"
 EXPECTED_MIN_BYTES = 300_000_000  # 約 330MB を期待。300MB 未満なら失敗扱い
 
 hf_token = os.environ.get("HF_TOKEN", "")
 if not hf_token:
-    sys.exit("❌ HF_TOKEN が設定されていません（~/.zshrc 確認）")
+    sys.exit("❌ HF_TOKEN が .env に設定されていません")
 
 s3 = boto3.client(
     "s3",

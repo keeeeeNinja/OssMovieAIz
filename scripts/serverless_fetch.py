@@ -6,7 +6,7 @@ RunPod Network Volume から S3 互換 API でファイルを取得する。
   RUNPOD_S3_ENDPOINT     例: https://s3api-eu-ro-1.runpod.io
   RUNPOD_S3_ACCESS_KEY
   RUNPOD_S3_SECRET_KEY
-  RUNPOD_VOLUME_ID       例: c1dbeweh5j
+  RUNPOD_VOLUME_ID       (RunPod で作成した Network Volume ID)
   RUNPOD_S3_REGION       例: EU-RO-1（省略可）
 
 Usage:
@@ -30,15 +30,9 @@ import sys
 from dotenv import load_dotenv
 from pathlib import Path
 
-# .env 読み込み優先度: プロジェクトルート → ~/.config/ossmovie/.env → 既存環境変数
-_env_candidates = [
-    Path.cwd() / ".env",
-    Path.home() / ".config" / "ossmovie" / ".env",
-]
-for _path in _env_candidates:
-    if _path.exists():
-        load_dotenv(_path, override=True)
-        break
+_env_path = Path.cwd() / ".env"
+if _env_path.exists():
+    load_dotenv(_env_path, override=False)
 
 # AWS_* 残骸が残っていると boto3 がそちらを優先する事故があるので除去
 for _k in ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN"):

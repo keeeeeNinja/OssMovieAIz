@@ -7,15 +7,9 @@ import sys
 from dotenv import load_dotenv
 from pathlib import Path
 
-# .env 読み込み優先度: プロジェクトルート → ~/.config/ossmovie/.env → 既存環境変数
-_env_candidates = [
-    Path.cwd() / ".env",
-    Path.home() / ".config" / "ossmovie" / ".env",
-]
-for _path in _env_candidates:
-    if _path.exists():
-        load_dotenv(_path, override=True)
-        break
+_env_path = Path.cwd() / ".env"
+if _env_path.exists():
+    load_dotenv(_env_path, override=False)
 
 # AWS_* 残骸が残っていると boto3 がそちらを優先する事故があるので除去
 for _k in ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN"):
@@ -37,7 +31,9 @@ c = boto3.client(
     region_name=os.environ["RUNPOD_S3_REGION"],  # RunPod は大文字 (EU-RO-1) を使う
 )
 
-bucket = os.environ.get("RUNPOD_VOLUME_ID", "c1dbeweh5j")
+bucket = os.environ.get("RUNPOD_VOLUME_ID", "")
+if not bucket:
+    sys.exit("❌ RUNPOD_VOLUME_ID を .env に設定してください")
 
 
 def fmt_size(n):

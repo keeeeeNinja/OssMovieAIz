@@ -5,23 +5,19 @@ RunPod Serverless Endpoint 作成スクリプト (Flux 用 / Wan I2V 用)。
 前提:
   - docker/Dockerfile.serverless が GitHub Actions でビルドされ、
     レジストリ（GHCR など）に push 済み
-  - Network Volume `c1dbeweh5j` が EU-RO-1 にある（既存）
+  - Network Volume を EU-RO-1 に作成済み（受講者は自分で作成）
   - 環境変数 RUNPOD_API_KEY が設定されている
   - GHCR が private の場合は RunPod 側で「Container Registry Auth」を作成し
     その ID を --registry-auth-id で指定する（public なら不要）
 
 Usage:
-  # 両方作成（推奨）
-  python3 scripts/create_serverless_endpoint.py \\
-    --image ghcr.io/keeeeeninja/ossmovie-comfyui:latest \\
-    --volume-id c1dbeweh5j \\
-    --datacenter EU-RO-1 \\
-    --kind both
+  # .env に RUNPOD_VOLUME_ID と RUNPOD_API_KEY を設定後、以下のみで OK:
+  python3 scripts/create_serverless_endpoint.py --kind all
 
-  # Flux だけ
-  python3 scripts/create_serverless_endpoint.py --kind flux ...
+  # 個別に Endpoint だけ作りたい場合
+  python3 scripts/create_serverless_endpoint.py --kind flux
 
-  # 作成後、表示される Endpoint ID を ~/.config/ossmovie/.env に追記:
+  # 作成後、表示される Endpoint ID を .env に追記:
   #   RUNPOD_ENDPOINT_FLUX=...
   #   RUNPOD_ENDPOINT_I2V=...
 """
@@ -29,7 +25,6 @@ Usage:
 import argparse
 import json
 import os
-import subprocess
 import sys
 import urllib.error
 import urllib.request
@@ -37,15 +32,9 @@ import urllib.request
 from dotenv import load_dotenv
 from pathlib import Path
 
-# .env 読み込み優先度: プロジェクトルート → ~/.config/ossmovie/.env → 既存環境変数
-_env_candidates = [
-    Path.cwd() / ".env",
-    Path.home() / ".config" / "ossmovie" / ".env",
-]
-for _path in _env_candidates:
-    if _path.exists():
-        load_dotenv(_path, override=True)
-        break
+_env_path = Path.cwd() / ".env"
+if _env_path.exists():
+    load_dotenv(_env_path, override=False)
 
 REST_BASE = "https://rest.runpod.io/v1"
 
@@ -53,16 +42,7 @@ REST_BASE = "https://rest.runpod.io/v1"
 def get_api_key():
     key = os.environ.get("RUNPOD_API_KEY", "")
     if not key:
-        try:
-            result = subprocess.run(
-                ["zsh", "-c", "source ~/.zshrc 2>/dev/null; echo $RUNPOD_API_KEY"],
-                capture_output=True, text=True, timeout=5,
-            )
-            key = result.stdout.strip()
-        except Exception:
-            pass
-    if not key:
-        sys.exit("❌ RUNPOD_API_KEY が設定されていません")
+        sys.exit("❌ RUNPOD_API_KEY が .env に設定されていません")
     return key
 
 
@@ -163,41 +143,48 @@ def main():
                                                 "ghcr.io/keeeeeninja/ossmovie-acestep:latest"),
                         help="ACE-Step worker の Docker image（acestep 用、env SERVERLESS_ACESTEP_IMAGE）")
     parser.add_argument("--volume-id",
-                        default=os.environ.get("RUNPOD_VOLUME_ID", "c1dbeweh5j"))
-    parser.add_argument("--datacenter", default="EU-RO-1")
+                        default=os.environ.get("RUNPOD_VOLUME_ID", ""))
+    parser.add_argument("--datacenter", default=os.environ.get("RUNPOD_DATACENTER", "EU-RO-1"))
     parser.add_argument("--kind", choices=["flux", "i2v", "tts", "acestep", "all"], default="all")
     parser.add_argument("--gpu-ids",
                         default="NVIDIA GeForce RTX 4090,NVIDIA GeForce RTX 5090",
                         help="プライオリティ順カンマ区切り（REST では gpuTypeIds の配列に変換）")
     parser.add_argument("--workers-min", type=int, default=0)
     parser.add_argument("--workers-max", type=int, default=3)
-    parser.add_argument("--idle-timeout", type=int, default=5,
-                        help="アイドル中の秒数（デフォルト 5 秒、コールドスタート最小化なら大きく）")
+    parser.add_argument("--idle-timeout", type=int, default=120,
+                        help="アイドル中の秒数（デフォルト 120 秒。連続生成中の Worker 維持で再ロード回避）")
     parser.add_argument("--registry-auth-id", default="",
                         help="GHCR が private の場合 RunPod に登録した Container Registry Auth の ID")
+    parser.add_argument("--name-suffix", default="",
+                        help="Template/Endpoint 名のサフィックス（例: -us-ca-2）。空だと付かない")
     args = parser.parse_args()
+
+    if not args.volume_id:
+        sys.exit("❌ RUNPOD_VOLUME_ID を .env に設定するか --volume-id を指定してください")
 
     api_key = get_api_key()
 
+    sfx = args.name_suffix
     # (name, exec_timeout_ms, image, kind) の順
     targets = []
     if args.kind in ("flux", "all"):
         if not args.image:
             sys.exit("❌ flux 作成には --image または env SERVERLESS_IMAGE が必要")
-        targets.append(("ossmovie-flux", 600_000, args.image, "comfyui"))
+        targets.append((f"ossmovie-flux{sfx}", 600_000, args.image, "comfyui"))
     if args.kind in ("i2v", "all"):
         if not args.image:
             sys.exit("❌ i2v 作成には --image または env SERVERLESS_IMAGE が必要")
-        targets.append(("ossmovie-i2v", 900_000, args.image, "comfyui"))
+        # Wan 2.1 14B はコールドスタート（イメージ pull + 10GB+ ロード）込みで 15〜25 分要するため 30 分余裕
+        targets.append((f"ossmovie-i2v{sfx}", 1_800_000, args.image, "comfyui"))
     if args.kind in ("tts", "all"):
         if not args.tts_image:
             sys.exit("❌ tts 作成には --tts-image または env SERVERLESS_TTS_IMAGE が必要")
-        targets.append(("ossmovie-tts", 120_000, args.tts_image, "tts"))
+        targets.append((f"ossmovie-tts{sfx}", 120_000, args.tts_image, "tts"))
     if args.kind in ("acestep", "all"):
         if not args.acestep_image:
             sys.exit("❌ acestep 作成には --acestep-image または env SERVERLESS_ACESTEP_IMAGE が必要")
         # ACE-Step XL Turbo は60秒生成で1〜2分。分割で計2回投入されることもあるので余裕を持たせる
-        targets.append(("ossmovie-acestep", 600_000, args.acestep_image, "acestep"))
+        targets.append((f"ossmovie-acestep{sfx}", 600_000, args.acestep_image, "acestep"))
 
     gpu_type_ids = [s.strip() for s in args.gpu_ids.split(",") if s.strip()]
 
@@ -216,7 +203,7 @@ def main():
     print("\n=== 完了 ===")
     for name, eid in results.items():
         print(f"  {name}: {eid}")
-    print("\n~/.config/ossmovie/.env に以下を追記してください:")
+    print("\n.env に以下を追記してください:")
     if "ossmovie-flux" in results:
         print(f'  RUNPOD_ENDPOINT_FLUX={results["ossmovie-flux"]}')
     if "ossmovie-i2v" in results:
