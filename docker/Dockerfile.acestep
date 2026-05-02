@@ -9,7 +9,9 @@
 # Output:
 #   {"audio": base64 wav, "sample_rate": int, "duration_sec": float}
 
-ARG BASE_IMAGE=pytorch/pytorch:2.4.0-cuda12.4-cudnn9-runtime
+# RunPod 公式 PyTorch image は git / ffmpeg / libsndfile1 を pre-install 済み。
+# pytorch/pytorch:* は buildkit の DNS 問題で apt-get が失敗するケースがあるので回避。
+ARG BASE_IMAGE=runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04
 FROM ${BASE_IMAGE}
 
 ENV PYTHONUNBUFFERED=1 \
@@ -18,9 +20,11 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /workspace
 
+# 念のため不足分のインストール（base image に既に大半が含まれる想定）
 RUN apt-get update \
- && apt-get install -y --no-install-recommends git ffmpeg libsndfile1 \
- && rm -rf /var/lib/apt/lists/*
+ && apt-get install -y --no-install-recommends ffmpeg libsndfile1 \
+ || echo "apt install skipped (likely already present in base image)" \
+ && rm -rf /var/lib/apt/lists/* || true
 
 # nano-vllm は ACE-Step の Linux x86_64 向け依存だが PyPI に無い。
 # GitHub から先にインストールしておく（ace-step の pyproject が見つけられるように）。
