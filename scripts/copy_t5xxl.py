@@ -2,9 +2,14 @@
 """Volume 内で t5xxl_fp8_e4m3fn.safetensors を models/clip/ から models/text_encoders/ にサーバーサイドコピー。
 Flux ワークフローが text_encoders/ を見るための一時的な対応。"""
 import os
+import sys
+from pathlib import Path
 
 from dotenv import load_dotenv
-load_dotenv(override=True)
+
+_env_path = Path.cwd() / ".env"
+if _env_path.exists():
+    load_dotenv(_env_path, override=False)
 
 # AWS_* 残骸が残っていると boto3 がそちらを優先する事故があるので除去
 for _k in ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN"):
@@ -21,7 +26,9 @@ c = boto3.client(
     region_name=os.environ["RUNPOD_S3_REGION"],  # RunPod は大文字
 )
 
-bucket = "c1dbeweh5j"
+bucket = os.environ.get("RUNPOD_VOLUME_ID", "")
+if not bucket:
+    sys.exit("❌ RUNPOD_VOLUME_ID を .env に設定してください")
 src_key = "ComfyUI/models/clip/t5xxl_fp8_e4m3fn.safetensors"
 dst_key = "ComfyUI/models/text_encoders/t5xxl_fp8_e4m3fn.safetensors"
 

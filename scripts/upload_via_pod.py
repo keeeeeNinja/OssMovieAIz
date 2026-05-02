@@ -27,20 +27,15 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-_env_candidates = [
-    Path.cwd() / ".env",
-    Path.home() / ".config" / "ossmovie" / ".env",
-]
-for _path in _env_candidates:
-    if _path.exists():
-        load_dotenv(_path, override=True)
-        break
+_env_path = Path.cwd() / ".env"
+if _env_path.exists():
+    load_dotenv(_env_path, override=False)
 
 GRAPHQL = "https://api.runpod.io/graphql"
 REST_BASE = "https://rest.runpod.io/v1"
-SSH_KEY = os.path.expanduser("~/.ssh/id_ed25519")
-VOLUME_ID = os.environ.get("RUNPOD_VOLUME_ID", "c1dbeweh5j")
-DATACENTER = "EU-RO-1"
+SSH_KEY = os.path.expanduser(os.environ.get("RUNPOD_SSH_KEY", "~/.ssh/id_ed25519"))
+VOLUME_ID = os.environ.get("RUNPOD_VOLUME_ID", "")
+DATACENTER = os.environ.get("RUNPOD_DATACENTER", "EU-RO-1")
 # wget だけなので最小 GPU で良い。RTX A4000 ≈ $0.17/hr、5 分使用で $0.014
 # 在庫優先で 4090 / A4000 / 3090 をフォールバック
 GPU_CANDIDATES = [
@@ -55,16 +50,7 @@ IMAGE = "runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04"
 def get_api_key():
     key = os.environ.get("RUNPOD_API_KEY", "")
     if not key:
-        try:
-            r = subprocess.run(
-                ["zsh", "-c", "source ~/.zshrc 2>/dev/null; echo $RUNPOD_API_KEY"],
-                capture_output=True, text=True, timeout=5,
-            )
-            key = r.stdout.strip()
-        except Exception:
-            pass
-    if not key:
-        sys.exit("❌ RUNPOD_API_KEY が未設定")
+        sys.exit("❌ RUNPOD_API_KEY が .env に設定されていません")
     return key
 
 
@@ -106,18 +92,8 @@ def rest_delete(api_key, path):
 
 
 def get_hf_token():
-    """Mac の環境変数 → ~/.zshrc → 空 の優先順で HF_TOKEN を取得（任意）"""
-    t = os.environ.get("HF_TOKEN", "")
-    if t:
-        return t
-    try:
-        r = subprocess.run(
-            ["zsh", "-c", "source ~/.zshrc 2>/dev/null; echo $HF_TOKEN"],
-            capture_output=True, text=True, timeout=5,
-        )
-        return r.stdout.strip()
-    except Exception:
-        return ""
+    """.env から HF_TOKEN を取得（任意。Public モデルなら未設定でも可）"""
+    return os.environ.get("HF_TOKEN", "")
 
 
 def create_pod(api_key, name):
@@ -239,6 +215,9 @@ def main():
                         "保存先は /workspace/hf_cache（= Serverless 側で /runpod-volume/hf_cache）")
     p.add_argument("--keep-pod", action="store_true", help="完了後も Pod を残す（デバッグ用）")
     args = p.parse_args()
+
+    if not VOLUME_ID:
+        sys.exit("❌ RUNPOD_VOLUME_ID を .env に設定してください")
 
     def to_pod_path(p):
         # Pod では Network Volume は /workspace にマウントされる

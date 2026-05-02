@@ -54,18 +54,7 @@ RUNPOD_API_URL = "https://api.runpod.io/graphql"
 def get_api_key():
     key = os.environ.get("RUNPOD_API_KEY", "")
     if not key:
-        # zshrcから読み込み
-        try:
-            result = subprocess.run(
-                ["zsh", "-c", "source ~/.zshrc 2>/dev/null; echo $RUNPOD_API_KEY"],
-                capture_output=True, text=True, timeout=5
-            )
-            key = result.stdout.strip()
-        except Exception:
-            pass
-    if not key:
-        print("❌ RUNPOD_API_KEY が設定されていません", file=sys.stderr)
-        sys.exit(1)
+        sys.exit("❌ RUNPOD_API_KEY が .env に設定されていません")
     return key
 
 

@@ -2,32 +2,21 @@
 """現在 RUNNING/STARTING な Pod を一覧表示（オーファン Pod 確認用）"""
 import json
 import os
-import subprocess
 import sys
 import urllib.request
 from pathlib import Path
 
 from dotenv import load_dotenv
 
-for _path in [Path.cwd() / ".env", Path.home() / ".config" / "ossmovie" / ".env"]:
-    if _path.exists():
-        load_dotenv(_path, override=True)
-        break
+_env_path = Path.cwd() / ".env"
+if _env_path.exists():
+    load_dotenv(_env_path, override=False)
 
 
 def get_api_key():
     key = os.environ.get("RUNPOD_API_KEY", "")
     if not key:
-        try:
-            r = subprocess.run(
-                ["zsh", "-c", "source ~/.zshrc 2>/dev/null; echo $RUNPOD_API_KEY"],
-                capture_output=True, text=True, timeout=5,
-            )
-            key = r.stdout.strip()
-        except Exception:
-            pass
-    if not key:
-        sys.exit("❌ RUNPOD_API_KEY 未設定")
+        sys.exit("❌ RUNPOD_API_KEY が .env に設定されていません")
     return key
 
 
