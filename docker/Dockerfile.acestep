@@ -26,8 +26,14 @@ RUN apt-get update \
  || echo "apt install skipped (likely already present in base image)" \
  && rm -rf /var/lib/apt/lists/* || true
 
-# nano-vllm は ACE-Step の Linux x86_64 向け依存だが PyPI に無い。
-# GitHub から先にインストールしておく（ace-step の pyproject が見つけられるように）。
+# ACE-Step XL 1.5 の依存:
+#   torch==2.10.0+cu128 (Linux x86_64) → PyTorch 公式 index からのみ取得可
+#   nano-vllm → PyPI に無い、GitHub から
+# 上記2つを ace-step インストール前に pre-install する。
+RUN pip install --no-cache-dir \
+      --index-url https://download.pytorch.org/whl/cu128 \
+      --extra-index-url https://pypi.org/simple \
+      torch==2.10.0 torchvision torchaudio
 RUN pip install --no-cache-dir git+https://github.com/GeeeekExplorer/nano-vllm.git || true
 
 # ACE-Step-1.5 リポジトリを焼き込む（コミット固定で再現性担保）
@@ -35,7 +41,9 @@ ARG ACESTEP_COMMIT=main
 RUN git clone https://github.com/ace-step/ACE-Step-1.5.git /workspace/ACE-Step-1.5 \
  && cd /workspace/ACE-Step-1.5 \
  && git checkout "${ACESTEP_COMMIT}" \
- && pip install --no-cache-dir -e .
+ && pip install --no-cache-dir \
+      --extra-index-url https://download.pytorch.org/whl/cu128 \
+      -e .
 
 # Serverless SDK + 依存（vllm は LLM ハンドラ用、軽量代替の transformers でも可）
 RUN pip install --no-cache-dir runpod soundfile transformers accelerate
