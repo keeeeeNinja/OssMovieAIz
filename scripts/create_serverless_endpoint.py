@@ -85,7 +85,7 @@ def rest_post(api_key, path, body):
 
 
 def create_template(api_key, name, image, registry_auth_id=None, kind="comfyui"):
-    """kind=comfyui (flux/i2v) / tts (Qwen3-TTS) を切り替え。env 変数が違う。"""
+    """kind=comfyui (flux/i2v) / tts (Qwen3-TTS) / acestep (ACE-Step XL) を切り替え。env 変数が違う。"""
     if kind == "tts":
         env = {
             "HF_HOME": "/runpod-volume/hf_cache",
@@ -93,6 +93,13 @@ def create_template(api_key, name, image, registry_auth_id=None, kind="comfyui")
         }
         readme = "OssMovieAIz Serverless Qwen3-TTS worker (auto-generated)."
         disk = 30  # PyTorch + flash-attn + qwen-tts deps が太い
+    elif kind == "acestep":
+        env = {
+            "HF_HOME": "/runpod-volume/hf_cache",
+            "HUGGINGFACE_HUB_CACHE": "/runpod-volume/hf_cache",
+        }
+        readme = "OssMovieAIz Serverless ACE-Step XL BGM worker (auto-generated)."
+        disk = 40  # torch 2.10 + ACE-Step + flash-attn + nano-vllm が太い
     else:
         env = {"COMFY_OUTPUT_PATH": "/runpod-volume/outputs"}
         readme = "OssMovieAIz Serverless ComfyUI worker (auto-generated)."
@@ -151,10 +158,14 @@ def main():
                         default=os.environ.get("SERVERLESS_TTS_IMAGE",
                                                 "ghcr.io/keeeeeninja/ossmovie-tts:latest"),
                         help="TTS worker の Docker image（tts 用、env SERVERLESS_TTS_IMAGE）")
+    parser.add_argument("--acestep-image",
+                        default=os.environ.get("SERVERLESS_ACESTEP_IMAGE",
+                                                "ghcr.io/keeeeeninja/ossmovie-acestep:latest"),
+                        help="ACE-Step worker の Docker image（acestep 用、env SERVERLESS_ACESTEP_IMAGE）")
     parser.add_argument("--volume-id",
                         default=os.environ.get("RUNPOD_VOLUME_ID", "c1dbeweh5j"))
     parser.add_argument("--datacenter", default="EU-RO-1")
-    parser.add_argument("--kind", choices=["flux", "i2v", "tts", "all"], default="all")
+    parser.add_argument("--kind", choices=["flux", "i2v", "tts", "acestep", "all"], default="all")
     parser.add_argument("--gpu-ids",
                         default="NVIDIA GeForce RTX 4090,NVIDIA GeForce RTX 5090",
                         help="プライオリティ順カンマ区切り（REST では gpuTypeIds の配列に変換）")
@@ -182,6 +193,11 @@ def main():
         if not args.tts_image:
             sys.exit("❌ tts 作成には --tts-image または env SERVERLESS_TTS_IMAGE が必要")
         targets.append(("ossmovie-tts", 120_000, args.tts_image, "tts"))
+    if args.kind in ("acestep", "all"):
+        if not args.acestep_image:
+            sys.exit("❌ acestep 作成には --acestep-image または env SERVERLESS_ACESTEP_IMAGE が必要")
+        # ACE-Step XL Turbo は60秒生成で1〜2分。分割で計2回投入されることもあるので余裕を持たせる
+        targets.append(("ossmovie-acestep", 600_000, args.acestep_image, "acestep"))
 
     gpu_type_ids = [s.strip() for s in args.gpu_ids.split(",") if s.strip()]
 
@@ -207,6 +223,8 @@ def main():
         print(f'  RUNPOD_ENDPOINT_I2V={results["ossmovie-i2v"]}')
     if "ossmovie-tts" in results:
         print(f'  RUNPOD_ENDPOINT_TTS={results["ossmovie-tts"]}')
+    if "ossmovie-acestep" in results:
+        print(f'  RUNPOD_ENDPOINT_ACESTEP={results["ossmovie-acestep"]}')
 
 
 if __name__ == "__main__":

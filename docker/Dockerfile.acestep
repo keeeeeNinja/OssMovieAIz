@@ -48,8 +48,10 @@ RUN git clone https://github.com/ace-step/ACE-Step-1.5.git /workspace/ACE-Step-1
 # Serverless SDK + 依存（vllm は LLM ハンドラ用、軽量代替の transformers でも可）
 RUN pip install --no-cache-dir runpod soundfile transformers accelerate
 
-# flash-attn は GPU 必須・ビルド失敗時は sdpa にフォールバックするので || true
-RUN MAX_JOBS=4 pip install --no-cache-dir flash-attn --no-build-isolation || true
+# flash-attn は CI ランナー（CPU 4core）でのコンパイルが 1〜2 時間かかりタイムアウトするため skip。
+# ACE-Step XL Turbo は SDPA フォールバックでも実用速度（30秒生成で40〜60秒程度）。
+# どうしても flash-attn を入れたい場合は GPU Pod 上でビルドし直す。
+# RUN MAX_JOBS=4 pip install --no-cache-dir flash-attn --no-build-isolation || true
 
 COPY docker/handler_acestep.py /workspace/handler.py
 
