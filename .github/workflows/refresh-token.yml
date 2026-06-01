@@ -1,10 +1,10 @@
 name: Refresh Instagram Token
 
 on:
-  schedule:
-    # 毎月1日と15日に実行（60日有効のトークンを余裕をもって更新）
-    - cron: '0 0 1,15 * *'
-  workflow_dispatch:
+  # schedule:
+  #   # 毎月1日と15日に実行（60日有効のトークンを余裕をもって更新）
+  #   - cron: '0 0 1,15 * *'
+  workflow_dispatch:  # 手動実行のみ残す
 
 jobs:
   refresh-token:
