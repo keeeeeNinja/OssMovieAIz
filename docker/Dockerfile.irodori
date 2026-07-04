@@ -1,0 +1,52 @@
+# fMovie Serverless Irodori-TTS Worker（案A：1エンドポイント・mode切替）
+#
+# 正本仕様: serverless_bundle/IRODORI_ENDPOINT_SPEC.md
+# 日本語 TTS（Aratako/Irodori-TTS）。mode で checkpoint を切替:
+#   - "plain"  → Irodori-TTS-500M-v3（no_ref・素の読み上げ）
+#   - "clone"  → Irodori-TTS-500M-v3 + ref_audio（声を寄せる／spi-monk R_men01 等）
+#   - "design" → Irodori-TTS-600M-v3-VoiceDesign + caption（声デザイン・候補出し）
+# 共通コーデック: Aratako/Semantic-DACVAE-Japanese-32dim
+# モデル重みは Network Volume /runpod-volume/hf_cache に常駐（bootstrap で事前DL）。
+
+# RunPod 公式 PyTorch image は git / ffmpeg / libsndfile1 を pre-install 済み。
+# pytorch/pytorch:* は buildkit の DNS 問題で apt-get が失敗するケースがあるので回避（acestep と同方針）。
+ARG BASE_IMAGE=runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04
+FROM ${BASE_IMAGE}
+
+ENV PYTHONUNBUFFERED=1 \
+    HF_HOME=/runpod-volume/hf_cache \
+    HUGGINGFACE_HUB_CACHE=/runpod-volume/hf_cache
+
+WORKDIR /workspace
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ffmpeg libsndfile1 sox \
+ || echo "apt install skipped (likely already present in base image)" \
+ && rm -rf /var/lib/apt/lists/* || true
+
+# Irodori-TTS は torch>=2.10 要求（base の 2.4.0 を上書き）。cu128 wheel は PyTorch 公式 index からのみ。
+# torchcodec は torch 2.10 と揃うバージョンを同時取得（<0.11）。
+RUN pip install --no-cache-dir \
+      --index-url https://download.pytorch.org/whl/cu128 \
+      --extra-index-url https://pypi.org/simple \
+      torch==2.10.0 torchaudio "torchcodec<0.11"
+
+# git 依存2つを ace-step の nano-vllm 同様に pre-install（Irodori 本体インストール前に）。
+RUN pip install --no-cache-dir "git+https://github.com/facebookresearch/dacvae"
+RUN pip install --no-cache-dir "git+https://github.com/SesameAILabs/silentcipher.git@d46d7d0893a583d8968ab3a6626e2289faec9152"
+
+# Irodori-TTS 本体を焼き込む（コミット固定で再現性担保）。transformers<5 / peft / sentencepiece 等を連れてくる。
+ARG IRODORI_COMMIT=main
+RUN git clone https://github.com/Aratako/Irodori-TTS.git /workspace/Irodori-TTS \
+ && cd /workspace/Irodori-TTS \
+ && git checkout "${IRODORI_COMMIT}" \
+ && pip install --no-cache-dir \
+      --extra-index-url https://download.pytorch.org/whl/cu128 \
+      -e .
+
+# Serverless SDK + 音声 I/O
+RUN pip install --no-cache-dir runpod soundfile
+
+COPY docker/handler_irodori.py /workspace/handler.py
+
+CMD ["python", "-u", "handler.py"]
